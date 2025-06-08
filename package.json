@@ -1,0 +1,25 @@
+{
+  "name": "kpop-roleplay-bot",
+  "version": "1.0.0",
+  "description": "K-pop roleplay Discord bot for managing groups, companies, and charts",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "node main.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "kpop",
+    "roleplay"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
