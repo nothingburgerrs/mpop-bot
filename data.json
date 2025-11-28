@@ -20,16 +20,18 @@
         "CLOUD PHONE": 100,
         "REMFACT": 110,
         "BRII": 100,
-        "ULT": 110
+        "ULT": 110,
+        "SWEET": 105,
+        "SPICE": 110
     },
     "company_funds": {
-        "YOUTH LABELS": 1016603,
+        "YOUTH LABELS": 9267214,
         "FISTY ENT": 6757328,
         "ONE MOTION": 7485968,
         "BONQ": 2950000,
         "NEWWAVE": 7760290,
         "T:ME LABELS": 554566,
-        "CLICK ENT": 60930,
+        "CLICK ENT": 106086,
         "U7S ENT": 2724795,
         "7MATE LABELS": 1035770,
         "LATTE ENT": 24561
@@ -45,7 +47,11 @@
             "wins": 2,
             "popularity": 894,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "RIBBON": {
             "company": "FISTY ENT",
@@ -56,7 +62,11 @@
             "wins": 5,
             "popularity": 725,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "JIYOU": {
             "company": "YOUTH LABELS",
@@ -67,7 +77,11 @@
             "wins": 2,
             "popularity": 253,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "EIZE": {
             "company": "FISTY ENT",
@@ -78,7 +92,11 @@
             "wins": 3,
             "popularity": 1204,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "IN*VENT": {
             "company": "FISTY ENT",
@@ -87,7 +105,11 @@
             "wins": 3,
             "popularity": 100,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "KWON YU JU": {
             "company": "FISTY ENT",
@@ -96,7 +118,11 @@
             "wins": 0,
             "popularity": 100,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "XCEL": {
             "company": "ONE MOTION",
@@ -109,7 +135,11 @@
             "wins": 2,
             "popularity": 776,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "MYSOUL": {
             "company": "ONE MOTION",
@@ -120,7 +150,11 @@
             "wins": 0,
             "popularity": 245,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "SUNAES": {
             "company": "ONE MOTION",
@@ -131,7 +165,11 @@
             "wins": 1,
             "popularity": 202,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "REVERIE": {
             "company": "ONE MOTION",
@@ -142,7 +180,11 @@
             "wins": 0,
             "popularity": 148,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "LUCKIDZ": {
             "company": "BONQ",
@@ -151,7 +193,11 @@
             "wins": 0,
             "popularity": 202,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "SUCH-A-THING": {
             "company": "BONQ",
@@ -160,7 +206,11 @@
             "wins": 0,
             "popularity": 100,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "PRIMROSE": {
             "company": "NEWWAVE",
@@ -171,7 +221,11 @@
             "wins": 3,
             "popularity": 134,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "JUICYPUNCH": {
             "company": "NEWWAVE",
@@ -182,7 +236,11 @@
             "wins": 3,
             "popularity": 1559,
             "debut_date": "2025-06-15",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "AZRA": {
             "company": "T:ME LABELS",
@@ -196,7 +254,11 @@
             "wins": 21,
             "popularity": 0,
             "debut_date": "2025-06-15",
-            "is_disbanded": true
+            "is_disbanded": true,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "H10N-Y": {
             "company": "U7S ENT",
@@ -208,7 +270,11 @@
             "wins": 0,
             "popularity": 813,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "HOUR*LY": {
             "company": "7MATE LABELS",
@@ -220,7 +286,11 @@
             "wins": 13,
             "popularity": 1240,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "CLOUD PHONE": {
             "company": "LATTE ENT",
@@ -232,7 +302,11 @@
             "wins": 0,
             "popularity": 148,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "REMFACT": {
             "company": "NEWWAVE",
@@ -243,7 +317,11 @@
             "wins": 0,
             "popularity": 110,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "BRII": {
             "company": "LATTE ENT",
@@ -255,7 +333,11 @@
             "wins": 0,
             "popularity": 121,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
         },
         "ULT": {
             "company": "U7S ENT",
@@ -266,7 +348,41 @@
             "wins": 0,
             "popularity": 425,
             "debut_date": "2025-06-16",
-            "is_disbanded": false
+            "is_disbanded": false,
+            "fanbase": 60,
+            "gp_interest": 55,
+            "virality": 50,
+            "company_power": 50
+        },
+        "SWEET": {
+            "company": "CLICK ENT",
+            "albums": [
+                "Sweety"
+            ],
+            "korean_name": "\ub2ec\ucf64\ud55c",
+            "wins": 0,
+            "popularity": 105,
+            "debut_date": "2025-11-28",
+            "is_disbanded": false,
+            "fanbase": 62,
+            "gp_interest": 57,
+            "virality": 53,
+            "company_power": 51
+        },
+        "SPICE": {
+            "company": "YOUTH LABELS",
+            "albums": [
+                "Spicy"
+            ],
+            "korean_name": "\uae30\ubbf8",
+            "wins": 3,
+            "popularity": 320,
+            "debut_date": "2025-11-28",
+            "is_disbanded": false,
+            "fanbase": 65,
+            "gp_interest": 59,
+            "virality": 56,
+            "company_power": 53
         }
     },
     "album_data": {
@@ -274,39 +390,61 @@
             "group": "WINGS",
             "wins": 0,
             "release_date": "2025-06-15",
-            "streams": 65248,
-            "sales": 23539,
+            "streams": 378907,
+            "sales": 57399,
             "image_url": "https://static.wikia.nocookie.net/kpop-fanon-fandom/images/4/48/Wings_logo.png/revision/latest?cb=20250108045734",
-            "is_active_promotion": false,
-            "promotion_end_date": null,
+            "is_active_promotion": true,
+            "promotion_end_date": "2025-12-05T01:28:02.297726",
             "charts_info": {
                 "MelOn": {
-                    "rank": null,
-                    "peak": null,
-                    "prev_rank": null
+                    "rank": 3,
+                    "peak": 2,
+                    "prev_rank": 3
                 },
                 "Genie": {
-                    "rank": null,
-                    "peak": null,
-                    "prev_rank": null
+                    "rank": 3,
+                    "peak": 2,
+                    "prev_rank": 3
                 },
                 "Bugs": {
-                    "rank": null,
-                    "peak": null,
-                    "prev_rank": null
+                    "rank": 3,
+                    "peak": 2,
+                    "prev_rank": 3
                 },
                 "FLO": {
-                    "rank": null,
-                    "peak": null,
-                    "prev_rank": null
+                    "rank": 3,
+                    "peak": 2,
+                    "prev_rank": 3
                 }
-            }
+            },
+            "views": 669,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 22350,
+            "gp_interest": 804,
+            "promo_power": 312,
+            "virality_potential": 0.229,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769858",
+                    "increment": 24101,
+                    "components": {
+                        "fanbase_core": 24101,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 89349
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "Girl Next Door": {
             "group": "WINGS",
             "wins": 0,
             "release_date": "2025-06-15",
-            "streams": 0,
+            "streams": 22532,
             "sales": 0,
             "image_url": "https://cdn.discordapp.com/attachments/1128908157247291402/1186574688877563934/Untitled_design_20231218_233702_0000.png?ex=6850740b&is=684f228b&hm=d562078644da7591157538971437163b5f255be86d0e239eb264532995e24d6f&",
             "is_active_promotion": false,
@@ -332,13 +470,35 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 22350,
+            "gp_interest": 804,
+            "promo_power": 312,
+            "virality_potential": 0.229,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769879",
+                    "increment": 22532,
+                    "components": {
+                        "fanbase_core": 22532,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 22532
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "Knock The Door": {
             "group": "RIBBON",
             "wins": 0,
             "release_date": "2025-06-15",
-            "streams": 25174,
+            "streams": 40212,
             "sales": 50,
             "image_url": "https://cdn.discordapp.com/attachments/1073454503921201212/1383943820982358046/Nuevo_proyecto_128_F2641F2.png?ex=6850a19f&is=684f501f&hm=90c3bd571b3827fb346abbb56c5f2707270a061cc6883f699b5d05d3941e683d&",
             "is_active_promotion": false,
@@ -364,17 +524,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 18125,
+            "gp_interest": 652,
+            "promo_power": 253,
+            "virality_potential": 0.195,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769893",
+                    "increment": 15038,
+                    "components": {
+                        "fanbase_core": 15038,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 40212
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "FORGET": {
             "group": "EIZE",
             "wins": 3,
             "release_date": "2025-06-15",
-            "streams": 821517,
+            "streams": 884275,
             "sales": 477043,
             "image_url": "https://cdn.discordapp.com/attachments/1128975914970128504/1360358947697197086/Nuevo_proyecto_114_9AD2F00.png?ex=685085ff&is=684f347f&hm=53d32471b943732b01778c55afd019773008c0424ba0b7372e67e2448a108f89&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-16T23:29:37.280929",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 182,
@@ -396,17 +578,39 @@
                     "peak": 41,
                     "prev_rank": 58
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 30100,
+            "gp_interest": 1083,
+            "promo_power": 421,
+            "virality_potential": 0.291,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769910",
+                    "increment": 62758,
+                    "components": {
+                        "fanbase_core": 30669,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 32089,
+                        "virality_triggered": true
+                    },
+                    "total_streams": 884275
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "WAY UP": {
             "group": "XCEL",
             "wins": 2,
             "release_date": "2025-06-15",
-            "streams": 450567,
+            "streams": 472650,
             "sales": 220066,
             "image_url": "https://static.wikia.nocookie.net/monthly-reals/images/4/4d/XCEL_WAY_UP.jpg/revision/latest?cb=20241231215732&path-prefix=es",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-07-05T23:30:22.006061",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 190,
@@ -428,17 +632,39 @@
                     "peak": 53,
                     "prev_rank": 72
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 19400,
+            "gp_interest": 698,
+            "promo_power": 271,
+            "virality_potential": 0.205,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769923",
+                    "increment": 22083,
+                    "components": {
+                        "fanbase_core": 22083,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 472650
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "PUNCHLINE": {
             "group": "JUICYPUNCH",
             "wins": 3,
             "release_date": "2025-06-15",
-            "streams": 1780883,
+            "streams": 1816770,
             "sales": 781386,
             "image_url": "https://cdn.discordapp.com/attachments/1128908157247291402/1362859082436051136/IMG_20250417_180949.jpg?ex=685063ed&is=684f126d&hm=e166f45a851651838f897afb2c471ce0d488a4d06e2ff3393a16bf63b6b309da&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-07-05T23:33:01.297466",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 188,
@@ -460,17 +686,39 @@
                     "peak": 1,
                     "prev_rank": 27
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 38975,
+            "gp_interest": 1403,
+            "promo_power": 545,
+            "virality_potential": 0.35,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769936",
+                    "increment": 35887,
+                    "components": {
+                        "fanbase_core": 35887,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 1816770
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "MYSOULSTICE": {
             "group": "MYSOUL",
             "wins": 0,
             "release_date": "2025-06-15",
-            "streams": 39895,
+            "streams": 45799,
             "sales": 42631,
             "image_url": "https://images-ext-1.discordapp.net/external/1Qd1kIEZ7IWAsxvdhR0XfXvMvBkg7ZjCtaAnXz-2-jY/%3Fcb%3D20250213003643%26path-prefix%3Des/https/static.wikia.nocookie.net/monthly-reals/images/b/ba/Mysoulstice.jpg/revision/latest?format=webp&width=561&height=561",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-18T04:16:05.194896",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -492,7 +740,29 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 6125,
+            "gp_interest": 220,
+            "promo_power": 85,
+            "virality_potential": 0.099,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769950",
+                    "increment": 5904,
+                    "components": {
+                        "fanbase_core": 5904,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 45799
+                }
+            ],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "azraMine": {
             "group": "AZRA",
@@ -524,7 +794,16 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 1500,
+            "gp_interest": 40,
+            "promo_power": 10,
+            "virality_potential": 0.05,
+            "stream_history": [],
+            "release_timestamp": "2025-06-15T00:00:00"
         },
         "azraWay": {
             "group": "AZRA",
@@ -556,13 +835,22 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 1500,
+            "gp_interest": 40,
+            "promo_power": 10,
+            "virality_potential": 0.05,
+            "stream_history": [],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "The Only (Attitude)": {
             "group": "H10N-Y",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 1208700,
+            "streams": 1228914,
             "sales": 331693,
             "image_url": "https://cdn.discordapp.com/attachments/1383972742465978369/1383972775265308845/IMG_0903.png?ex=6850bc96&is=684f6b16&hm=3d059403f02ba358882039f677a7bd304326b6b72b74ea99a2e0507c4d0d3a73&",
             "is_active_promotion": false,
@@ -588,17 +876,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 20325,
+            "gp_interest": 731,
+            "promo_power": 284,
+            "virality_potential": 0.213,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.769983",
+                    "increment": 20214,
+                    "components": {
+                        "fanbase_core": 20214,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 1228914
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "Aeon: REVERB": {
             "group": "REVERIE",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 36045,
+            "streams": 43957,
             "sales": 16258,
             "image_url": "https://static.wikia.nocookie.net/monthly-reals/images/a/ac/Aeon_reverb.jpg/revision/latest?cb=20250118055502&path-prefix=es",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-18T03:53:48.276978",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -620,7 +930,29 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3700,
+            "gp_interest": 133,
+            "promo_power": 51,
+            "virality_potential": 0.08,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770000",
+                    "increment": 7912,
+                    "components": {
+                        "fanbase_core": 4097,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 3815,
+                        "virality_triggered": true
+                    },
+                    "total_streams": 43957
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "azraGlow": {
             "group": "AZRA",
@@ -652,13 +984,22 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 1500,
+            "gp_interest": 40,
+            "promo_power": 10,
+            "virality_potential": 0.05,
+            "stream_history": [],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "HOURGLASS": {
             "group": "HOUR*LY",
             "wins": 4,
             "release_date": "2025-06-16",
-            "streams": 955278,
+            "streams": 983470,
             "sales": 245407,
             "image_url": "https://cdn.discordapp.com/attachments/1383972742465978369/1383985208591650836/IMG_5004.png?ex=6850c82a&is=684f76aa&hm=e7c605def2c955d4e0f94764222a697bf17557fb89a4d32b87232f21475bacae&",
             "is_active_promotion": false,
@@ -684,17 +1025,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 31000,
+            "gp_interest": 1116,
+            "promo_power": 434,
+            "virality_potential": 0.298,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770019",
+                    "increment": 28192,
+                    "components": {
+                        "fanbase_core": 28192,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 983470
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "ROSE KNIGHT": {
             "group": "PRIMROSE",
             "wins": 3,
             "release_date": "2025-06-16",
-            "streams": 4567,
+            "streams": 7455,
             "sales": 3974,
             "image_url": "https://cdn.discordapp.com/attachments/1128908157247291402/1346140060881256599/IMG_20250220_155236.jpg?ex=68503620&is=684ee4a0&hm=0da782ceec4a39fa9908f0b537e4fd877f23023c3909082c3d6386e0f7cf7997&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-21T02:41:32.267762",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -716,7 +1079,29 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3350,
+            "gp_interest": 120,
+            "promo_power": 46,
+            "virality_potential": 0.077,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770031",
+                    "increment": 2888,
+                    "components": {
+                        "fanbase_core": 2888,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 7455
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "Good Memories": {
             "group": "AZRA",
@@ -748,13 +1133,22 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 1500,
+            "gp_interest": 40,
+            "promo_power": 10,
+            "virality_potential": 0.05,
+            "stream_history": [],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "EVE": {
             "group": "JIYOU",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 0,
+            "streams": 5754,
             "sales": 0,
             "image_url": "https://cdn.discordapp.com/attachments/1128908157247291402/1324581132221546557/Picsart_24-12-31_00-15-07-570.jpg?ex=6850390f&is=684ee78f&hm=57dca82540540895cc1b0d4608cd6695d6f102e69fc34cf389f985b6f17838fa&",
             "is_active_promotion": false,
@@ -780,17 +1174,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 6325,
+            "gp_interest": 227,
+            "promo_power": 88,
+            "virality_potential": 0.101,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770048",
+                    "increment": 5754,
+                    "components": {
+                        "fanbase_core": 5754,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 5754
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "GAMERUN": {
             "group": "H10N-Y",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 1295735,
+            "streams": 1339853,
             "sales": 197055,
             "image_url": "https://cdn.discordapp.com/attachments/1383972742465978369/1384002166930542632/IMG_0906.png?ex=6850d7f6&is=684f8676&hm=b0d49e1edf00f2f5eb132a1a02dfef04220dfacbbc8358f9189bb959336507ab&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-19T03:16:00.420247",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 200,
@@ -812,17 +1228,39 @@
                     "peak": 41,
                     "prev_rank": 41
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 20325,
+            "gp_interest": 731,
+            "promo_power": 284,
+            "virality_potential": 0.213,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770061",
+                    "increment": 44118,
+                    "components": {
+                        "fanbase_core": 18717,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 25401,
+                        "virality_triggered": true
+                    },
+                    "total_streams": 1339853
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "Beyond The Sun": {
             "group": "SUNAES",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 5493,
+            "streams": 10259,
             "sales": 0,
             "image_url": "https://media.discordapp.net/attachments/1129250458356170754/1384002299533201570/image.png?ex=6850d815&is=684f8695&hm=2c32517a77282f8b461158f8e4ffc61b7cbf05d5324d3d332233c5c70ea889dd&=&format=webp&quality=lossless&width=186&height=188",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-18T03:17:14.527524",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -844,13 +1282,35 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 5050,
+            "gp_interest": 181,
+            "promo_power": 70,
+            "virality_potential": 0.09,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770089",
+                    "increment": 4766,
+                    "components": {
+                        "fanbase_core": 4766,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 10259
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "Extrastellae": {
             "group": "XCEL",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 125428,
+            "streams": 143171,
             "sales": 29537,
             "image_url": "https://placehold.co/128x128.png?text=Album",
             "is_active_promotion": false,
@@ -876,17 +1336,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 19400,
+            "gp_interest": 698,
+            "promo_power": 271,
+            "virality_potential": 0.205,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770100",
+                    "increment": 17743,
+                    "components": {
+                        "fanbase_core": 17743,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 143171
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "HEAVEN": {
             "group": "CLOUD PHONE",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 12926,
+            "streams": 19475,
             "sales": 2808,
             "image_url": "https://media.discordapp.net/attachments/1128908157247291402/1320653629035778068/16_sin_titulo_20241223042205.png?ex=68506fc9&is=684f1e49&hm=b6d080291551d63290f63737a590b32e103e02bb07e3daddf9ff1153da685119&=&format=webp&quality=lossless&width=967&height=967",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-17T04:15:42.220112",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -908,17 +1390,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3700,
+            "gp_interest": 133,
+            "promo_power": 51,
+            "virality_potential": 0.08,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770111",
+                    "increment": 6549,
+                    "components": {
+                        "fanbase_core": 3253,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 3296,
+                        "virality_triggered": true
+                    },
+                    "total_streams": 19475
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "HOURCUPID": {
             "group": "HOUR*LY",
             "wins": 9,
             "release_date": "2025-06-16",
-            "streams": 3330799,
+            "streams": 3372732,
             "sales": 831173,
             "image_url": "https://cdn.discordapp.com/attachments/1383972742465978369/1384009048478978129/202_sin_titulo2_20250526162139.png?ex=6850de5e&is=684f8cde&hm=93dca34b13b8e0eacccae945cdbaaacb802433ad7ab7b9c0378d8d2593186d57&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-20T03:54:49.085932",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 152,
@@ -940,13 +1444,35 @@
                     "peak": 1,
                     "prev_rank": 1
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 31000,
+            "gp_interest": 1116,
+            "promo_power": 434,
+            "virality_potential": 0.298,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770122",
+                    "increment": 41933,
+                    "components": {
+                        "fanbase_core": 26941,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 14992,
+                        "virality_triggered": true
+                    },
+                    "total_streams": 3372732
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "ECHOES OF XCENTURY": {
             "group": "XCEL",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 249780,
+            "streams": 268855,
             "sales": 137758,
             "image_url": "https://static.wikia.nocookie.net/monthly-reals/images/8/84/XCEL_ECHOES_OF_XCENTURY.jpg/revision/latest/scale-to-width-down/140?cb=20241231212402&path-prefix=es",
             "is_active_promotion": false,
@@ -972,13 +1498,35 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 19400,
+            "gp_interest": 698,
+            "promo_power": 271,
+            "virality_potential": 0.205,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770134",
+                    "increment": 19075,
+                    "components": {
+                        "fanbase_core": 19075,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 268855
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "CLINK CLINK": {
             "group": "CLOUD PHONE",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 100,
+            "streams": 3275,
             "sales": 570,
             "image_url": "https://media.discordapp.net/attachments/1129250458356170754/1383998201438273606/160_sin_titulo_20250116231728.png?ex=6850d444&is=684f82c4&hm=046a8b2bb51ef77c6c96424735bf7292de3d89818056fd878dd64fcf56f935bd&=&format=webp&quality=lossless&width=873&height=873",
             "is_active_promotion": false,
@@ -1004,17 +1552,39 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3700,
+            "gp_interest": 133,
+            "promo_power": 51,
+            "virality_potential": 0.08,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770146",
+                    "increment": 3175,
+                    "components": {
+                        "fanbase_core": 3175,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 3275
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "The FACTIONS": {
             "group": "REMFACT",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 340367,
+            "streams": 343259,
             "sales": 3947,
             "image_url": "https://cdn.discordapp.com/attachments/1128908157247291402/1364041035264557147/IMG_20250323_204722.jpg?ex=6850bc35&is=684f6ab5&hm=ea5b45649a133f35f4cd1b88496eacad70b4a77600db0e61c8586383d1169982&",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-21T04:39:43.880603",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": 209,
@@ -1036,17 +1606,39 @@
                     "peak": 65,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 2750,
+            "gp_interest": 99,
+            "promo_power": 38,
+            "virality_potential": 0.072,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770157",
+                    "increment": 2892,
+                    "components": {
+                        "fanbase_core": 2892,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 343259
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "briight Day": {
             "group": "BRII",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 13971,
+            "streams": 16439,
             "sales": 10195,
             "image_url": "https://media.discordapp.net/attachments/1128908157247291402/1339833750024097843/Nuevo_proyecto_62_E45D7B8.png?ex=6850572a&is=684f05aa&hm=9f61dba6ba9be40ac29ca53cf27619bccbf8ebccae886628dd79aa5bae0e4b79&=&format=webp&quality=lossless&width=967&height=967",
-            "is_active_promotion": true,
-            "promotion_end_date": "2025-06-19T04:22:44.505053",
+            "is_active_promotion": false,
+            "promotion_end_date": null,
             "charts_info": {
                 "MelOn": {
                     "rank": null,
@@ -1068,13 +1660,35 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3025,
+            "gp_interest": 108,
+            "promo_power": 42,
+            "virality_potential": 0.074,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770168",
+                    "increment": 2468,
+                    "components": {
+                        "fanbase_core": 2468,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 16439
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "ETERKIZ": {
             "group": "ULT",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 804699,
+            "streams": 815982,
             "sales": 47693,
             "image_url": "https://cdn.discordapp.com/attachments/1383972742465978369/1384025126768738344/IMG_4517.png?ex=6850ed58&is=684f9bd8&hm=e3ba62933b9f438adc03485c79db0df46b1bea796636007023ed8eb89dbb942f&",
             "is_active_promotion": false,
@@ -1100,13 +1714,35 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 10625,
+            "gp_interest": 382,
+            "promo_power": 148,
+            "virality_potential": 0.135,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770180",
+                    "increment": 11283,
+                    "components": {
+                        "fanbase_core": 11283,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 815982
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
         },
         "Lips On": {
             "group": "BRII",
             "wins": 0,
             "release_date": "2025-06-16",
-            "streams": 6837,
+            "streams": 10272,
             "sales": 10948,
             "image_url": "https://media.discordapp.net/attachments/1128908157247291402/1364707491396583516/Nuevo_proyecto_118_6A42A28.png?ex=685085e4&is=684f3464&hm=006979dd86226e7bd2699f7f11c93cc4249cf769c2d3ebbc7e83177f336ca984&=&format=webp&quality=lossless&width=967&height=967",
             "is_active_promotion": false,
@@ -1132,12 +1768,116 @@
                     "peak": null,
                     "prev_rank": null
                 }
-            }
+            },
+            "views": 0,
+            "first_24h_streams": 0,
+            "first_24h_views": 0,
+            "fanbase_size": 3025,
+            "gp_interest": 108,
+            "promo_power": 42,
+            "virality_potential": 0.074,
+            "stream_history": [
+                {
+                    "timestamp": "2025-11-28T01:27:35.770191",
+                    "increment": 3435,
+                    "components": {
+                        "fanbase_core": 3435,
+                        "gp_decay": 0,
+                        "promo_boost": 0,
+                        "virality_spike": 0,
+                        "virality_triggered": false
+                    },
+                    "total_streams": 10272
+                }
+            ],
+            "release_timestamp": "2025-06-16T00:00:00"
+        },
+        "Sweety": {
+            "group": "SWEET",
+            "wins": 0,
+            "release_date": "2025-11-28",
+            "streams": 0,
+            "views": 14357,
+            "first_24h_streams": 0,
+            "first_24h_views": 14357,
+            "sales": 3156,
+            "image_url": "https://placehold.co/128x128.png?text=Album",
+            "is_active_promotion": true,
+            "promotion_end_date": "2025-12-06T01:29:03.278522",
+            "release_timestamp": "2025-11-28T01:28:52.191996",
+            "charts_info": {
+                "MelOn": {
+                    "rank": 2,
+                    "peak": 1,
+                    "prev_rank": 2
+                },
+                "Genie": {
+                    "rank": 2,
+                    "peak": 1,
+                    "prev_rank": 2
+                },
+                "Bugs": {
+                    "rank": 2,
+                    "peak": 1,
+                    "prev_rank": 2
+                },
+                "FLO": {
+                    "rank": 2,
+                    "peak": 1,
+                    "prev_rank": 2
+                }
+            },
+            "stream_history": [],
+            "fanbase_size": 2625,
+            "gp_interest": 94,
+            "promo_power": 36,
+            "virality_potential": 0.071
+        },
+        "Spicy": {
+            "group": "SPICE",
+            "wins": 3,
+            "release_date": "2025-11-28",
+            "streams": 520421,
+            "views": 53528,
+            "first_24h_streams": 442475,
+            "first_24h_views": 53528,
+            "sales": 21030,
+            "image_url": "https://placehold.co/128x128.png?text=Album",
+            "is_active_promotion": true,
+            "promotion_end_date": "2025-12-10T01:34:37.979112",
+            "release_timestamp": "2025-11-28T01:33:32.734971",
+            "charts_info": {
+                "MelOn": {
+                    "rank": 1,
+                    "peak": 1,
+                    "prev_rank": 1
+                },
+                "Genie": {
+                    "rank": 1,
+                    "peak": 1,
+                    "prev_rank": 1
+                },
+                "Bugs": {
+                    "rank": 1,
+                    "peak": 1,
+                    "prev_rank": 1
+                },
+                "FLO": {
+                    "rank": 1,
+                    "peak": 1,
+                    "prev_rank": 1
+                }
+            },
+            "stream_history": [],
+            "fanbase_size": 2750,
+            "gp_interest": 99,
+            "promo_power": 38,
+            "virality_potential": 0.072
         }
     },
     "user_balances": {
         "755890966128230573": 1471689,
-        "979346606233104415": 1396644,
+        "979346606233104415": 8996644,
         "1109649251362943006": 119579,
         "1380733398238232768": 324849,
         "1067928527204274267": 180308
@@ -1159,9 +1899,10 @@
             "daily": "2025-06-16T04:10:13.390814"
         },
         "979346606233104415": {
-            "streams": "2025-06-16T04:48:21.934201",
-            "sales": "2025-06-16T04:48:34.938864",
-            "daily": "2025-06-16T01:32:47.898311"
+            "streams": "2025-11-28T01:39:27.038337",
+            "sales": "2025-11-28T01:40:11.698281",
+            "daily": "2025-11-28T01:39:42.414927",
+            "views": "2025-11-28T01:41:17.585559"
         },
         "1067928527204274267": {
             "streams": "2025-06-16T04:36:25.391671",
@@ -1213,7 +1954,8 @@
                 "2025-06-16": 3
             },
             "perform": {
-                "2025-06-16": 10
+                "2025-06-16": 10,
+                "2025-11-28": 4
             }
         }
     },
@@ -1238,5 +1980,129 @@
             "BONQ",
             "LATTE ENT"
         ]
+    },
+    "stream_logs": [
+        {
+            "user_id": "979346606233104415",
+            "album_name": "Feel My Wings",
+            "timestamp": "2025-11-28T01:27:46.321192"
+        },
+        {
+            "user_id": "979346606233104415",
+            "album_name": "Feel My Wings",
+            "timestamp": "2025-11-28T01:30:20.968896"
+        },
+        {
+            "user_id": "979346606233104415",
+            "album_name": "Spicy",
+            "timestamp": "2025-11-28T01:34:46.393237"
+        },
+        {
+            "user_id": "979346606233104415",
+            "album_name": "Spicy",
+            "timestamp": "2025-11-28T01:36:59.704340"
+        },
+        {
+            "user_id": "979346606233104415",
+            "album_name": "Spicy",
+            "timestamp": "2025-11-28T01:39:27.042876"
+        }
+    ],
+    "latest_chart_snapshot": {
+        "generated_at": "2025-11-28T01:41:40.995078",
+        "platforms": {
+            "MelOn": [
+                {
+                    "album": "Spicy",
+                    "group": "SPICE",
+                    "rank": 1,
+                    "score": 19.6011,
+                    "streams": 520421
+                },
+                {
+                    "album": "Sweety",
+                    "group": "SWEET",
+                    "rank": 2,
+                    "score": 16.545,
+                    "streams": 0
+                },
+                {
+                    "album": "Feel My Wings",
+                    "group": "WINGS",
+                    "rank": 3,
+                    "score": 4.7103,
+                    "streams": 378907
+                }
+            ],
+            "Genie": [
+                {
+                    "album": "Spicy",
+                    "group": "SPICE",
+                    "rank": 1,
+                    "score": 16.7573,
+                    "streams": 520421
+                },
+                {
+                    "album": "Sweety",
+                    "group": "SWEET",
+                    "rank": 2,
+                    "score": 13.545,
+                    "streams": 0
+                },
+                {
+                    "album": "Feel My Wings",
+                    "group": "WINGS",
+                    "rank": 3,
+                    "score": 4.5907,
+                    "streams": 378907
+                }
+            ],
+            "Bugs": [
+                {
+                    "album": "Spicy",
+                    "group": "SPICE",
+                    "rank": 1,
+                    "score": 13.8162,
+                    "streams": 520421
+                },
+                {
+                    "album": "Sweety",
+                    "group": "SWEET",
+                    "rank": 2,
+                    "score": 11.236,
+                    "streams": 0
+                },
+                {
+                    "album": "Feel My Wings",
+                    "group": "WINGS",
+                    "rank": 3,
+                    "score": 3.7112,
+                    "streams": 378907
+                }
+            ],
+            "FLO": [
+                {
+                    "album": "Spicy",
+                    "group": "SPICE",
+                    "rank": 1,
+                    "score": 11.1874,
+                    "streams": 520421
+                },
+                {
+                    "album": "Sweety",
+                    "group": "SWEET",
+                    "rank": 2,
+                    "score": 8.927,
+                    "streams": 0
+                },
+                {
+                    "album": "Feel My Wings",
+                    "group": "WINGS",
+                    "rank": 3,
+                    "score": 3.0591,
+                    "streams": 378907
+                }
+            ]
+        }
     }
 }
