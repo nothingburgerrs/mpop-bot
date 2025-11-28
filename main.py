@@ -406,6 +406,36 @@ def _calculate_stream_tick(album_name: str, album_entry: dict):
     }
 
 
+def _calculate_view_tick(album_name: str, album_entry: dict):
+    _ensure_album_defaults(album_name, album_entry)
+
+    group_name = album_entry.get('group')
+    group_entry = group_data.get(group_name, {}) if group_name else {}
+    if group_entry.get('is_disbanded'):
+        return 0
+
+    fanbase_size = album_entry.get('fanbase_size', 0)
+    gp_interest = album_entry.get('gp_interest', 0)
+    promo_power = album_entry.get('promo_power', 0)
+    company_power = group_entry.get('company_power', DEFAULT_GROUP_TRAITS['company_power'])
+    popularity = group_entry.get('popularity', 0)
+
+    base_views = int(fanbase_size * random.uniform(0.14, 0.26))
+    gp_component = int(gp_interest * random.uniform(25, 38))
+
+    promo_component = 0
+    if _is_album_promotion_active(album_entry):
+        promo_component = int(promo_power * random.uniform(32, 55))
+    else:
+        promo_component = int(promo_power * 0.15)
+
+    leaderboard_boost = int(max(0, popularity - 85) * random.uniform(45, 70))
+    company_boost = int(company_power * random.uniform(35, 55))
+
+    total_views = max(50, base_views + gp_component + promo_component + leaderboard_boost + company_boost)
+    return total_views
+
+
 @tasks.loop(minutes=STREAM_TICK_MINUTES)
 async def stream_tick_loop():
     for album_name, album_entry in album_data.items():
@@ -425,6 +455,11 @@ async def stream_tick_loop():
         if len(history) > STREAM_HISTORY_LIMIT:
             album_entry['stream_history'] = history[-STREAM_HISTORY_LIMIT:]
         _ensure_album_defaults(album_name, album_entry)
+
+        # Organic YouTube view growth alongside automated streams
+        views_added = _calculate_view_tick(album_name, album_entry)
+        if views_added:
+            add_views_to_album(album_entry, views_added)
 
     save_data()
 
@@ -838,10 +873,18 @@ async def views(interaction: discord.Interaction, album_name: str):
         await interaction.response.send_message(f"❌ Cannot stream views for {group_name} as they are disbanded.", ephemeral=True)
         return
 
-    group_current_popularity = group_data[group_name].get('popularity', 0)
+    group_entry = group_data[group_name]
+    group_current_popularity = group_entry.get('popularity', 0)
+    company_power = group_entry.get('company_power', DEFAULT_GROUP_TRAITS['company_power'])
 
-    base_views = group_current_popularity * 120
-    views_to_add = max(100, int(random.gauss(mu=base_views, sigma=group_current_popularity * 60)))
+    album_fanbase = current_album_data.get('fanbase_size', 0)
+    popularity_multiplier = 1 + max(0, group_current_popularity - 75) / 55
+    company_multiplier = 1 + company_power / 120
+
+    base_views = (group_current_popularity * 180) + (album_fanbase * 0.65) + (company_power * 110)
+    noisy_mu = base_views * popularity_multiplier * company_multiplier
+    noisy_sigma = max(600, album_fanbase * 0.25)
+    views_to_add = max(300, int(random.gauss(mu=noisy_mu, sigma=noisy_sigma)))
 
     current_album_data = add_views_to_album(current_album_data, views_to_add)
     album_data[album_name] = current_album_data
@@ -1664,19 +1707,84 @@ async def companies(interaction: discord.Interaction):
 
 # === Chart Logic and Command ===
 
-# CHART_CONFIG for realism - Adjusted based on user's feedback for more achievable charting
+# CHART_CONFIG for realism - Adjusted to create platform variance and harder #1s
 CHART_CONFIG = {
-    "MelOn": {"max_rank": 200, "stream_sensitivity": 0.0000003, "charting_threshold": 120, "recency_weight": 15, "virality_weight": 5}, # Hardest #1, but achievable
-    "Genie": {"max_rank": 150, "stream_sensitivity": 0.0000006, "charting_threshold": 90, "recency_weight": 12, "virality_weight": 5},
-    # Adjusted Bugs: Lower sensitivity (harder to chart high), higher max_rank and charting_threshold for more spread
-  "Bugs": {"max_rank": 100, "stream_sensitivity": 0.0000005, "charting_threshold": 70, "recency_weight": 10, "virality_weight": 4},
-    "FLO": {"max_rank": 80, "stream_sensitivity": 0.000001, "charting_threshold": 60, "recency_weight": 8, "virality_weight": 3},
+    "MelOn": {
+        "max_rank": 200,
+        "competition_baseline": 4_500_000,
+        "spread_factor": 1.08,
+        "recency_weight": 12,
+        "virality_weight": 5,
+        "variability": 0.22,
+    },
+    "Genie": {
+        "max_rank": 150,
+        "competition_baseline": 3_500_000,
+        "spread_factor": 1.05,
+        "recency_weight": 10,
+        "virality_weight": 5,
+        "variability": 0.2,
+    },
+    "Bugs": {
+        "max_rank": 120,
+        "competition_baseline": 2_250_000,
+        "spread_factor": 1.02,
+        "recency_weight": 9,
+        "virality_weight": 4,
+        "variability": 0.18,
+    },
+    "FLO": {
+        "max_rank": 100,
+        "competition_baseline": 1_650_000,
+        "spread_factor": 1.0,
+        "recency_weight": 8,
+        "virality_weight": 3,
+        "variability": 0.16,
+    },
 }
 
 
-def _calculate_chart_rank(album_streams: int, chart_settings: dict):
-    """Calculates a deterministic charting score for ranking."""
-    return album_streams * chart_settings['stream_sensitivity']
+def _estimate_platform_rank(album_entry: dict, platform_name: str, settings: dict, now: datetime):
+    """Estimate a realistic rank (with gaps) for one album on one platform."""
+    streams = album_entry.get('streams', 0)
+    recency_score = _compute_recency_score(album_entry.get('release_date'), now)
+    virality_score = _compute_virality_bonus(f"{album_entry.get('group', '')}:{platform_name}:{album_entry.get('release_date', '')}")
+
+    group_name = album_entry.get('group')
+    group_entry = group_data.get(group_name, {}) if group_name else {}
+    popularity = group_entry.get('popularity', 70)
+    company_power = group_entry.get('company_power', DEFAULT_GROUP_TRAITS['company_power'])
+    fanbase_trait = group_entry.get('fanbase', DEFAULT_GROUP_TRAITS['fanbase'])
+
+    # Baseline competition: how many streams other unseen songs are pulling.
+    # Competition pressure adds day-to-day difficulty to secure high ranks
+    variability = settings.get('variability', 0.15)
+    competition_pressure = random.lognormvariate(0, variability / 2)
+
+    baseline = settings['competition_baseline'] * competition_pressure
+    spread = settings['spread_factor']
+
+    stream_strength = streams / max(1, baseline)
+    base_rank = (1 / max(stream_strength, 0.0001)) ** spread
+
+    # Bonus for momentum and strong companies/fandoms
+    momentum_factor = 1 + recency_score * settings.get('recency_weight', 0) + virality_score * settings.get('virality_weight', 0)
+    tier_bonus = 1 + (popularity / 160) + (company_power / 260) + (fanbase_trait / 260)
+    base_rank = base_rank / max(1.05, momentum_factor * tier_bonus)
+
+    # Platform-specific variance to avoid perfect alignment across charts
+    adjusted_rank = base_rank * random.uniform(1 - variability, 1 + variability)
+
+    # Prevent perfect zeros and keep numbers friendly for later rounding
+    adjusted_rank = max(1, adjusted_rank)
+
+    return adjusted_rank, {
+        'streams': streams,
+        'recency_score': recency_score,
+        'virality_score': virality_score,
+        'popularity': popularity,
+        'company_power': company_power,
+    }
 
 
 def _gather_active_albums():
@@ -1693,20 +1801,25 @@ def _generate_chart_rankings(active_albums: dict):
     """Generates chart rankings for all platforms based on active albums and their streams."""
     platform_rankings = {platform_name: {} for platform_name in CHART_CONFIG}
 
+    now = datetime.now()
     for platform_name, settings in CHART_CONFIG.items():
-        eligible_albums = []
-
+        expected_positions = []
         for album_name, album_entry in active_albums.items():
-            album_streams = album_entry.get('streams', 0)
-            chart_score = _calculate_chart_rank(album_streams, settings)
+            estimated_rank, _details = _estimate_platform_rank(album_entry, platform_name, settings, now)
+            expected_positions.append((album_name, estimated_rank))
 
-            if chart_score >= settings['charting_threshold']:
-                eligible_albums.append((album_name, album_streams, chart_score))
+        expected_positions.sort(key=lambda item: item[1])
+        used_ranks = set()
+        for album_name, expected_rank in expected_positions:
+            proposed_rank = max(1, int(round(expected_rank)))
+            while proposed_rank in used_ranks:
+                proposed_rank += 1
 
-        # Sort primarily by streams to reflect platform-specific popularity, using chart_score as a deterministic tiebreaker
-        eligible_albums.sort(key=lambda item: (item[1], item[2]), reverse=True)
-        for idx, (album_name, _streams, _score) in enumerate(eligible_albums[:settings['max_rank']]):
-            platform_rankings[platform_name][album_name] = idx + 1
+            if proposed_rank > settings['max_rank']:
+                continue  # Not charting on this platform
+
+            used_ranks.add(proposed_rank)
+            platform_rankings[platform_name][album_name] = proposed_rank
 
     return platform_rankings
 
@@ -1791,6 +1904,22 @@ def _update_chart_info(album_entry: dict, chart_name: str, new_rank: int):
             chart_info['peak'] = new_rank
 
 
+def _apply_all_kill_bonus(album_entry: dict):
+    """Reward albums that secure #1 on every platform with GP + fanbase growth."""
+    group_name = album_entry.get('group')
+    group_entry = group_data.get(group_name, {}) if group_name else {}
+
+    album_entry['fanbase_size'] = int(album_entry.get('fanbase_size', 0) * 1.05)
+    album_entry['gp_interest'] = int(album_entry.get('gp_interest', 0) + 6)
+    album_entry['promo_power'] = int(album_entry.get('promo_power', 0) + 3)
+
+    if group_entry:
+        group_entry['fanbase'] = clamp(group_entry.get('fanbase', DEFAULT_GROUP_TRAITS['fanbase']) + 4, 0, 200)
+        group_entry['gp_interest'] = clamp(group_entry.get('gp_interest', DEFAULT_GROUP_TRAITS['gp_interest']) + 5, 0, 200)
+        group_entry['popularity'] = clamp(group_entry.get('popularity', 0) + 3, 0, 999999)
+        group_data[group_name] = group_entry
+
+
 def refresh_chart_snapshot():
     """Recalculate chart standings for all active albums and persist a snapshot."""
     now = datetime.now()
@@ -1802,55 +1931,69 @@ def refresh_chart_snapshot():
 
     snapshot = {"generated_at": now.isoformat(), "platforms": {}}
 
+    album_rank_map = {}
+
     for platform_name, settings in CHART_CONFIG.items():
-        platform_results = []
+        expected_results = []
         for album_name, album_entry in active_albums.items():
-            streams = album_entry.get('streams', 0)
-            recency_score = _compute_recency_score(album_entry.get('release_date'), now)
-            virality_score = _compute_virality_bonus(f"{album_name}:{album_entry.get('group', '')}")
-
-            stream_component = streams * settings['stream_sensitivity']
-            recency_component = recency_score * settings.get('recency_weight', 0)
-            virality_component = virality_score * settings.get('virality_weight', 0)
-            total_score = stream_component + recency_component + virality_component
-
-            platform_results.append({
+            estimated_rank, score_details = _estimate_platform_rank(album_entry, platform_name, settings, now)
+            expected_results.append({
                 'album': album_name,
                 'group': album_entry.get('group'),
-                'score': total_score,
-                'streams': streams,
-                'recency_score': recency_score,
-                'virality_score': virality_score
+                'estimated_rank': estimated_rank,
+                'streams': score_details['streams'],
+                'recency_score': score_details['recency_score'],
+                'virality_score': score_details['virality_score'],
+                'popularity': score_details['popularity'],
+                'company_power': score_details['company_power'],
             })
 
-        sorted_results = sorted(
-            platform_results,
-            key=lambda entry: (
-                -entry['score'],
-                -entry['streams'],
-                -entry['recency_score'],
-                -entry['virality_score'],
-                entry['album']
-            )
-        )
+        sorted_results = sorted(expected_results, key=lambda entry: entry['estimated_rank'])
 
-        chart_cutoff = settings.get('charting_threshold', settings['max_rank'])
         platform_snapshot = []
-        for idx, entry in enumerate(sorted_results, start=1):
-            rank_value = idx if idx <= chart_cutoff else None
-            album_entry = album_data.get(entry['album'])
-            _update_chart_info(album_entry, platform_name, rank_value)
+        used_ranks = set()
+        for entry in sorted_results:
+            proposed_rank = max(1, int(round(entry['estimated_rank'])))
 
-            if rank_value is not None and idx <= settings['max_rank']:
-                platform_snapshot.append({
-                    'album': entry['album'],
-                    'group': entry['group'],
-                    'rank': rank_value,
-                    'score': round(entry['score'], 4),
-                    'streams': entry['streams']
-                })
+            # Introduce natural spacing so charts aren't perfectly sequential
+            if proposed_rank > 1:
+                gap_scale = settings.get('variability', 0.15)
+                natural_gap = int(random.triangular(0, proposed_rank * gap_scale * 0.8, proposed_rank * gap_scale * 1.4))
+                proposed_rank += natural_gap
+
+            while proposed_rank in used_ranks:
+                proposed_rank += 1
+
+            if proposed_rank > settings['max_rank']:
+                continue
+
+            used_ranks.add(proposed_rank)
+            album_entry = album_data.get(entry['album'])
+            _update_chart_info(album_entry, platform_name, proposed_rank)
+
+            platform_snapshot.append({
+                'album': entry['album'],
+                'group': entry['group'],
+                'rank': proposed_rank,
+                'streams': entry['streams'],
+                'recency_score': round(entry['recency_score'], 3),
+                'virality_score': round(entry['virality_score'], 3),
+                'popularity': entry['popularity'],
+                'company_power': entry['company_power'],
+            })
+
+            album_rank_map.setdefault(entry['album'], {})[platform_name] = proposed_rank
 
         snapshot['platforms'][platform_name] = platform_snapshot
+
+    # Apply All-Kill bonus if an album holds #1 across every major chart
+    snapshot['all_kills'] = []
+    for album_name, platform_ranks in album_rank_map.items():
+        if len(platform_ranks) == len(CHART_CONFIG) and all(rank == 1 for rank in platform_ranks.values()):
+            snapshot['all_kills'].append(album_name)
+            album_entry = album_data.get(album_name)
+            if album_entry:
+                _apply_all_kill_bonus(album_entry)
 
     latest_chart_snapshot.clear()
     latest_chart_snapshot.update(snapshot)
@@ -1884,7 +2027,7 @@ async def charts(interaction: discord.Interaction, group_name: str):
         await interaction.response.send_message(f"❌ Cannot show charts for {group_name_upper} as they are disbanded.", ephemeral=True)
         return
 
-    refresh_chart_snapshot()
+    snapshot = refresh_chart_snapshot()
     active_album_name = _get_active_album_for_group(group_name_upper)
 
     if not active_album_name:
@@ -1897,11 +2040,11 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
     report_lines = []
 
-    # Header line format: "<:SNS_Titter:1355910325115031642> GroupName AlbumName June 15th Update"
     current_date_formatted = f"{datetime.now().strftime('%B')} {ordinal(datetime.now().day)}"
 
     # Display group name and album name without "ULT" or quotes
-    report_lines.append(f"<:SNS_Titter:1355910325115031642> **{group_name_upper} {active_album_name} {current_date_formatted} Update**\n")
+    report_lines.append(f"<:SNS_Titter:1355910325115031642> **{group_name_upper} {active_album_name} {current_date_formatted} Update**")
+    report_lines.append("*(Charts refreshed just now — latest streams + views counted.)*\n")
     if album_entry.get('release_timestamp'):
         stream_line, view_line = format_debut_announcement(
             active_album_name,
@@ -1950,6 +2093,9 @@ async def charts(interaction: discord.Interaction, group_name: str):
     else:
         report_lines.append(f"*{active_album_name} by {group_name_upper} is not currently charting on any major platform.*")
 
+    if snapshot.get('all_kills') and active_album_name in snapshot['all_kills']:
+        report_lines.append("\n🏆 **ALL-KILL!** #1 on every chart — GP awareness and fanbase boosted.")
+
     recent_history = album_entry.get('stream_history', [])[-3:]
     if recent_history:
         report_lines.append("\n__Recent Streams__")
@@ -1985,6 +2131,78 @@ async def charts(interaction: discord.Interaction, group_name: str):
     report_lines.append("\n" + "\n".join(final_hashtags_block)) # Add newline before hashtags
 
     await interaction.response.send_message("\n".join(report_lines))
+
+
+@bot.tree.command(description="View the latest top positions for a specific chart.")
+@app_commands.describe(
+    platform="Which chart to view (MelOn, Genie, Bugs, FLO)",
+    limit="How many ranks to display (max 50)",
+)
+async def charttop(interaction: discord.Interaction, platform: str, limit: int = 50):
+    platform_key = next((name for name in CHART_CONFIG if name.lower() == platform.lower()), None)
+    if not platform_key:
+        await interaction.response.send_message(
+            f"❌ Unknown chart `{platform}`. Choose from: {', '.join(CHART_CONFIG.keys())}.",
+            ephemeral=True
+        )
+        return
+
+    limit = max(1, min(limit, 50, CHART_CONFIG[platform_key]['max_rank']))
+
+    snapshot = refresh_chart_snapshot()
+    platform_entries = snapshot.get('platforms', {}).get(platform_key, [])
+
+    if not platform_entries:
+        await interaction.response.send_message(f"ℹ️ No songs are currently charting on {platform_key}.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title=f"{platform_key} Top {limit}",
+        description="Latest chart pull (updates each request)",
+        color=discord.Color.green()
+    )
+
+    for entry in platform_entries[:limit]:
+        stream_text = format_number(entry.get('streams', 0))
+        embed.add_field(
+            name=f"#{entry.get('rank')} — {entry.get('album')}",
+            value=f"{entry.get('group', 'Unknown')} • Streams: {stream_text}",
+            inline=False
+        )
+
+    generated_at = snapshot.get('generated_at')
+    if generated_at:
+        try:
+            pretty_time = datetime.fromisoformat(generated_at).strftime('%b %d %H:%M')
+            embed.set_footer(text=f"Refreshed: {pretty_time}")
+        except ValueError:
+            embed.set_footer(text=f"Refreshed at {generated_at}")
+
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(description="See debut-day streams and views for an album.")
+async def debutmetrics(interaction: discord.Interaction, album_name: str):
+    if album_name not in album_data:
+        await interaction.response.send_message(f"❌ Album `{album_name}` not found.", ephemeral=True)
+        return
+
+    album_entry = album_data[album_name]
+    _ensure_album_defaults(album_name, album_entry)
+    release_dt = _get_release_date(album_entry)
+
+    embed = discord.Embed(
+        title=f"🎬 Debut Metrics — {album_name}",
+        description=f"Group: **{album_entry.get('group', 'Unknown')}**",
+        color=discord.Color.blurple()
+    )
+    embed.add_field(name="Release Date", value=release_dt.strftime('%Y-%m-%d'), inline=True)
+    embed.add_field(name="First 24h Streams", value=format_number(album_entry.get('first_24h_streams', 0)), inline=True)
+    embed.add_field(name="First 24h Views", value=format_number(album_entry.get('first_24h_views', 0)), inline=True)
+    embed.add_field(name="Total Streams", value=format_number(album_entry.get('streams', 0)), inline=True)
+    embed.add_field(name="Total Views", value=format_number(album_entry.get('views', 0)), inline=True)
+
+    await interaction.response.send_message(embed=embed)
 @bot.tree.command(description="View streaming stats and momentum for an album.")
 async def stats(interaction: discord.Interaction, album_name: str):
     if album_name not in album_data:
