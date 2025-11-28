@@ -101,9 +101,29 @@ def load_data():
                 for album_name, data in loaded_album_data.items():
                     data.setdefault('streams', 0)
                     data.setdefault('sales', 0)
+                    data.setdefault('views', 0)
+                    data.setdefault('first_24h_streams', 0)
+                    data.setdefault('first_24h_views', 0)
                     data.setdefault('image_url', DEFAULT_ALBUM_IMAGE)
                     data.setdefault('is_active_promotion', False)
                     _ensure_album_defaults(album_name, data)
+
+                      release_ts_value = data.get('release_timestamp')
+                    if isinstance(release_ts_value, str):
+                        try:
+                            data['release_timestamp'] = datetime.fromisoformat(release_ts_value)
+                        except ValueError:
+                            data['release_timestamp'] = None
+                    elif not isinstance(release_ts_value, datetime):
+                        data['release_timestamp'] = None
+
+                    if data.get('release_timestamp') is None:
+                        release_date_value = data.get('release_date')
+                        if isinstance(release_date_value, str):
+                            try:
+                                data['release_timestamp'] = datetime.fromisoformat(release_date_value)
+                            except ValueError:
+                                data['release_timestamp'] = None
 
                     # Ensure charts_info structure is always present
                     data.setdefault('charts_info', {})
@@ -195,6 +215,34 @@ def format_number(num):
     if num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
     if num >= 1_000: return f"{num / 1_000:.1f}K"
     return str(num)
+    def is_within_first_24h(album_entry: dict) -> bool:
+    """Check if the album is within its first 24 hours of release."""
+    release_timestamp = album_entry.get('release_timestamp')
+    if isinstance(release_timestamp, datetime):
+        return datetime.now() <= release_timestamp + timedelta(hours=24)
+    return False
+
+def format_debut_announcement(album_name: str, group_name: str, streams: int, views: int):
+    """Return standardized debut announcement strings for streams and views."""
+    return (
+        f'"{album_name}" by {group_name} debuts with {format_number(streams)} streams on Spotify Counter.',
+        f'"{album_name}" by {group_name} debuts with {format_number(views)} views on YouTube Counter.'
+    )
+
+def add_streams_to_album(album_entry: dict, streams_to_add: int):
+    """Add streams to an album and track first 24-hour totals."""
+    album_entry['streams'] = album_entry.get('streams', 0) + streams_to_add
+    if is_within_first_24h(album_entry):
+        album_entry['first_24h_streams'] = album_entry.get('first_24h_streams', 0) + streams_to_add
+    return album_entry
+
+def add_views_to_album(album_entry: dict, views_to_add: int):
+    """Add views to an album and track first 24-hour totals."""
+    album_entry['views'] = album_entry.get('views', 0) + views_to_add
+    if is_within_first_24h(album_entry):
+        album_entry['first_24h_views'] = album_entry.get('first_24h_views', 0) + views_to_add
+    return album_entry
+
 
 def get_user_companies(user_id: str):
     """Returns a list of company names owned by the user."""
@@ -437,8 +485,8 @@ async def sales(interaction: discord.Interaction, album_name: str):
     base_sales = group_current_popularity * 50 # Increased from 10
     sales_to_add = max(50, int(random.gauss(mu=base_sales, sigma=group_current_popularity * 25))) # Increased sigma
 
-    current_album_data['sales'] = current_album_data.get('sales', 0) + sales_to_add
-    album_data[album_name] = current_album_data 
+    current_album_data = add_streams_to_album(current_album_data, streams_to_add)
+    album_data[album_name] = current_album_data
 
     # Add money to the company's bank (1 Monthly Peso per sale)
     company_name = group_data[group_name]['company']
@@ -603,7 +651,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
     )
     embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
     embed.add_field(name="Streams Added", value=f"{format_number(streams_to_add)}", inline=True)
-    embed.set_footer(text=f"Total Streams: {format_number(current_album_data['streams'])}") 
+    embed.set_footer(text=f"Total Streams: {format_number(current_album_data['streams'])}")
 
     await interaction.response.send_message(embed=embed)
 
@@ -614,6 +662,51 @@ async def streams(interaction: discord.Interaction, album_name: str):
         except discord.errors.Forbidden:
             print(f"ERROR: Missing permissions to send public 'nugupromoter' message in channel {interaction.channel.id}")
 
+@bot.tree.command(description="Watch a music video to add YouTube views!")
+async def views(interaction: discord.Interaction, album_name: str):
+    user_id = str(interaction.user.id)
+    on_cooldown, remaining_time = check_cooldown(user_id, "views", 2)
+    if on_cooldown:
+        await interaction.response.send_message(f"⏳ You are on cooldown for views. Please wait {remaining_time.seconds} seconds.", ephemeral=True)
+        return
+
+    if album_name not in album_data:
+        await interaction.response.send_message(f"❌ Album '{album_name}' not found. Are you sure you typed the name correctly?", ephemeral=True)
+        return
+
+    current_album_data = album_data[album_name]
+    group_name = current_album_data.get('group')
+    if not group_name:
+        await interaction.response.send_message("❌ Album does not have an associated group.", ephemeral=True)
+        return
+    if group_name not in group_data:
+        await interaction.response.send_message("❌ Associated group not found. Cannot calculate view bonus.", ephemeral=True)
+        return
+    if group_data[group_name].get('is_disbanded'):
+        await interaction.response.send_message(f"❌ Cannot stream views for {group_name} as they are disbanded.", ephemeral=True)
+        return
+
+    group_current_popularity = group_data[group_name].get('popularity', 0)
+
+    base_views = group_current_popularity * 120
+    views_to_add = max(100, int(random.gauss(mu=base_views, sigma=group_current_popularity * 60)))
+
+    current_album_data = add_views_to_album(current_album_data, views_to_add)
+    album_data[album_name] = current_album_data
+
+    update_cooldown(user_id, "views")
+    save_data()
+
+    embed = discord.Embed(
+        title=album_name,
+        description=f"**{group_name}** • Music Video",
+        color=discord.Color.red()
+    )
+    embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.add_field(name="Views Added", value=f"{format_number(views_to_add)}", inline=True)
+    embed.set_footer(text=f"Total Views: {format_number(current_album_data.get('views', 0))}")
+
+    await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(description="Make your group perform to gain popularity!")
 @app_commands.describe(group_name="The name of your group.")
@@ -854,7 +947,7 @@ class SponsorshipDealView(ui.View):
                 random_album_name = random.choice(active_albums) # Pick an active album
                 album_entry = album_data.get(random_album_name)
                 if album_entry:
-                    album_entry['streams'] = album_entry.get('streams', 0) + stream_gain
+                    album_entry = add_streams_to_album(album_entry, stream_gain)
                     album_entry['sales'] = album_entry.get('sales', 0) + sales_gain
                     album_data[random_album_name] = album_entry
                     outcome_embed.add_field(name="Album Gains", value=f"• {format_number(stream_gain)} Streams to '{random_album_name}'\n• {format_number(sales_gain)} Sales to '{random_album_name}'", inline=False)
@@ -1198,10 +1291,14 @@ async def debut(
         'wins': 0,
         'release_date': datetime.now().strftime("%Y-%m-%d"),
         'streams': 0,
+        'views': 0,
+        'first_24h_streams': 0,
+        'first_24h_views': 0,
         'sales': 0,
         'image_url': image_url, # Store the image URL
         'is_active_promotion': False, # Newly debuted album is not active until promoperiod
         'promotion_end_date': None,
+        'release_timestamp': datetime.now(),
         'charts_info': { # Initialize chart info for the new album
             "MelOn": {'rank': None, 'peak': None, 'prev_rank': None},
             "Genie": {'rank': None, 'peak': None, 'prev_rank': None},
@@ -1274,11 +1371,15 @@ async def comeback(
         'group': group_name_upper,
         'wins': 0,
         'release_date': datetime.now().strftime("%Y-%m-%d"),
-        'streams': 0,
+         'streams': 0,
+        'views': 0,
+        'first_24h_streams': 0,
+        'first_24h_views': 0,
         'sales': 0,
         'image_url': image_url, # Store the image URL
         'is_active_promotion': False, # Newly released album is not active until promoperiod
         'promotion_end_date': None,
+        'release_timestamp': datetime.now(),
         'charts_info': { # Initialize chart info for the new album
             "MelOn": {'rank': None, 'peak': None, 'prev_rank': None},
             "Genie": {'rank': None, 'peak': None, 'prev_rank': None},
@@ -1665,6 +1766,17 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
     # Display group name and album name without "ULT" or quotes
     report_lines.append(f"<:SNS_Titter:1355910325115031642> **{group_name_upper} {active_album_name} {current_date_formatted} Update**\n")
+if album_entry.get('release_timestamp'):
+        stream_line, view_line = format_debut_announcement(
+            active_album_name,
+            group_name_upper,
+            album_entry.get('first_24h_streams', 0),
+            album_entry.get('first_24h_views', 0)
+        )
+        report_lines.append("**Debut Metrics (First 24 Hours)**")
+        report_lines.append(stream_line)
+        report_lines.append(view_line)
+        report_lines.append("")
 
 
     final_chart_display = []
@@ -1827,10 +1939,16 @@ async def view_group(interaction: discord.Interaction, group_name: str):
         for album in albums_list:
             album_detail = album_data.get(album, {})
             streams = format_number(album_detail.get('streams', 0))
+            views = format_number(album_detail.get('views', 0))
             sales = format_number(album_detail.get('sales', 0))
+            first_24h_streams = format_number(album_detail.get('first_24h_streams', 0))
+            first_24h_views = format_number(album_detail.get('first_24h_views', 0))
             wins = album_detail.get('wins', 0)
             is_active = " (Active Promo)" if album_detail.get('is_active_promotion') else ""
-            albums_str.append(f"**{album}**{is_active} (Streams: {streams}, Sales: {sales}, Wins: {wins})")
+            albums_str.append(
+                f"**{album}**{is_active} (Streams: {streams} | 24h Streams: {first_24h_streams} |"
+                f" Views: {views} | 24h Views: {first_24h_views} | Sales: {sales} | Wins: {wins})"
+            )
         embed.add_field(name="Albums", value="\n".join(albums_str), inline=False)
     else:
         embed.add_field(name="Albums", value="No albums released yet.", inline=False)
@@ -2042,7 +2160,7 @@ class PayolaShopView(ui.View):
             streams_added = random.randint(*item_details['streams_to_add_range'])
             sales_added = random.randint(*item_details['sales_to_add_range'])
 
-            target_album_entry['streams'] = target_album_entry.get('streams', 0) + streams_added
+            target_album_entry = add_streams_to_album(target_album_entry, streams_added)
             target_album_entry['sales'] = target_album_entry.get('sales', 0) + sales_added
 
             outcome_message += (
