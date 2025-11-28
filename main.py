@@ -120,7 +120,7 @@ def load_data():
                     data.setdefault('is_active_promotion', False)
                     _ensure_album_defaults(album_name, data)
 
-                      release_ts_value = data.get('release_timestamp')
+                    release_ts_value = data.get('release_timestamp')
                     if isinstance(release_ts_value, str):
                         try:
                             data['release_timestamp'] = datetime.fromisoformat(release_ts_value)
@@ -145,7 +145,7 @@ def load_data():
                     album_data[album_name] = data
 
                 user_balances.update(loaded_data.get('user_balances', {}))
-                
+
                 latest_chart_snapshot.update(loaded_data.get('latest_chart_snapshot', {}))
 
                 # Handle user_companies: convert single string to list if old format
@@ -185,7 +185,7 @@ def save_data():
         'user_cooldowns': user_cooldowns,
         'user_daily_limits': user_daily_limits,
         'user_companies': user_companies, # Ensure user_companies is always saved
-        'stream_logs': stream_logs
+        'stream_logs': stream_logs,
         'latest_chart_snapshot': latest_chart_snapshot
     }
     # Custom encoder for datetime objects
@@ -229,8 +229,8 @@ def format_number(num):
     if num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
     if num >= 1_000: return f"{num / 1_000:.1f}K"
     return str(num)
-    
-    def clamp(value: int, minimum: int, maximum: int):
+
+def clamp(value: int, minimum: int, maximum: int):
     return max(minimum, min(value, maximum))
 
 
@@ -243,7 +243,7 @@ def _generate_group_traits(investment: int = 0):
         'company_power': clamp(DEFAULT_GROUP_TRAITS['company_power'] + adjusted_investment // 300000, 30, 120),
     }
 
-    def is_within_first_24h(album_entry: dict) -> bool:
+def is_within_first_24h(album_entry: dict) -> bool:
     """Check if the album is within its first 24 hours of release."""
     release_timestamp = album_entry.get('release_timestamp')
     if isinstance(release_timestamp, datetime):
@@ -303,7 +303,7 @@ def update_cooldown(user_id: str, command_name: str):
         user_cooldowns[user_id] = {}
     user_cooldowns[user_id][command_name] = datetime.now()
     save_data()
-    
+
 def log_stream_usage(user_id: str, album_name: str):
     """Record a stream command usage for analytics."""
     stream_logs.append(
@@ -356,7 +356,7 @@ def check_daily_limit(user_id: str, command_name: str, max_uses: int):
     save_data()
     return False, max_uses - (current_uses + 1) # False for not limited, remaining uses
 
-    def _get_release_date(album_entry: dict):
+def _get_release_date(album_entry: dict):
     release_date_raw = album_entry.get('release_date')
     if isinstance(release_date_raw, datetime):
         return release_date_raw
@@ -550,7 +550,7 @@ async def sales(interaction: discord.Interaction, album_name: str):
     base_sales = group_current_popularity * 50 # Increased from 10
     sales_to_add = max(50, int(random.gauss(mu=base_sales, sigma=group_current_popularity * 25))) # Increased sigma
 
-    current_album_data = add_streams_to_album(current_album_data, streams_to_add)
+    current_album_data['sales'] = current_album_data.get('sales', 0) + sales_to_add
     album_data[album_name] = current_album_data
 
     # Add money to the company's bank (1 Monthly Peso per sale)
@@ -727,7 +727,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
         await interaction.response.send_message(f"❌ Cannot stream for {group_name} as they are disbanded.", ephemeral=True)
         return
 
-   group_entry = group_data[group_name]
+    group_entry = group_data[group_name]
     group_current_popularity = group_entry.get('popularity', 0)
 
     platform_multipliers = calculate_platform_multipliers(group_entry)
@@ -750,7 +750,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
     )
     embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
     embed.add_field(name="Streams Added", value=f"{format_number(streams_to_add)}", inline=True)
-     top_platform = max(platform_multipliers.items(), key=lambda item: item[1])
+    top_platform = max(platform_multipliers.items(), key=lambda item: item[1])
     embed.add_field(name="Promo Boost", value=f"{average_multiplier:.2f}x avg ({top_platform[0]} {top_platform[1]:.2f}x)", inline=True)
     embed.set_footer(text=f"Total Streams: {format_number(current_album_data['streams'])}")
 
@@ -1437,7 +1437,7 @@ async def debut(
     group_data[group_name_upper] = new_group_data
     group_popularity[group_name_upper] = new_group_data['popularity']
 
- album_attributes = _generate_album_attributes_for_group(group_name_upper)
+    album_attributes = _generate_album_attributes_for_group(group_name_upper)
 
     # Create album entry
     new_album_data = {
@@ -1518,14 +1518,14 @@ async def comeback(
     group_entry['albums'].append(album_name)
     group_entry['popularity'] = group_entry.get('popularity', 0) + (investment // 200000) 
 
- album_attributes = _generate_album_attributes_for_group(group_name_upper)
+    album_attributes = _generate_album_attributes_for_group(group_name_upper)
 
     # Create album entry
     new_album_data = {
         'group': group_name_upper,
         'wins': 0,
         'release_date': datetime.now().strftime("%Y-%m-%d"),
-         'streams': 0,
+        'streams': 0,
         'views': 0,
         'first_24h_streams': 0,
         'first_24h_views': 0,
@@ -1675,19 +1675,8 @@ CHART_CONFIG = {
 
 
 def _calculate_chart_rank(album_streams: int, chart_settings: dict):
-   """Calculates a deterministic charting score for ranking."""
+    """Calculates a deterministic charting score for ranking."""
     return album_streams * chart_settings['stream_sensitivity']
-def _is_album_promotion_active(album_entry: dict):
-    """Checks if an album's promotion is still active and clears chart data when it ends."""
-    promo_end_date_obj = album_entry.get('promotion_end_date')
- if album_entry.get('is_active_promotion') and promo_end_date_obj and datetime.now() > promo_end_date_obj:
-        album_entry['is_active_promotion'] = False
-        album_entry['promotion_end_date'] = None
-        for chart_key in album_entry.get('charts_info', {}):
-            album_entry['charts_info'][chart_key] = {'rank': None, 'peak': None, 'prev_rank': None}
-        return False
-
-    return album_entry.get('is_active_promotion') and (not promo_end_date_obj or datetime.now() <= promo_end_date_obj)
 
 
 def _gather_active_albums():
@@ -1716,7 +1705,7 @@ def _generate_chart_rankings(active_albums: dict):
 
         # Sort primarily by streams to reflect platform-specific popularity, using chart_score as a deterministic tiebreaker
         eligible_albums.sort(key=lambda item: (item[1], item[2]), reverse=True)
- for idx, (album_name, _streams, _score) in enumerate(eligible_albums[:settings['max_rank']]):
+        for idx, (album_name, _streams, _score) in enumerate(eligible_albums[:settings['max_rank']]):
             platform_rankings[platform_name][album_name] = idx + 1
 
     return platform_rankings
@@ -1730,7 +1719,7 @@ def _refresh_all_chart_ranks():
     for album_name, album_entry in active_albums.items():
         for platform_name in CHART_CONFIG:
             assigned_rank = platform_rankings.get(platform_name, {}).get(album_name)
-            _update_and_format_chart_line(album_entry, platform_name, assigned_rank, format_only=False)
+            _update_chart_info(album_entry, platform_name, assigned_rank)
 
     save_data()
 
@@ -1794,7 +1783,7 @@ def _compute_virality_bonus(identifier: str):
 def _update_chart_info(album_entry: dict, chart_name: str, new_rank: int):
     """Update chart fields for an album with the freshly calculated rank."""
     chart_info = _get_chart_info(album_entry, chart_name)
-        chart_info['prev_rank'] = chart_info.get('rank')
+    chart_info['prev_rank'] = chart_info.get('rank')
     chart_info['rank'] = new_rank
 
     if new_rank is not None:
@@ -1807,16 +1796,13 @@ def refresh_chart_snapshot():
     now = datetime.now()
     active_albums = {}
 
-     for album_name, album_entry in album_data.items():
+    for album_name, album_entry in album_data.items():
         if _is_album_promotion_active(album_entry):
             active_albums[album_name] = album_entry
 
     snapshot = {"generated_at": now.isoformat(), "platforms": {}}
 
-  if not format_only:
-        return None
-
-  for platform_name, settings in CHART_CONFIG.items():
+    for platform_name, settings in CHART_CONFIG.items():
         platform_results = []
         for album_name, album_entry in active_albums.items():
             streams = album_entry.get('streams', 0)
@@ -1874,14 +1860,12 @@ def refresh_chart_snapshot():
 def _get_active_album_for_group(group_name_upper: str):
     """Return the active album for a group if one exists."""
     group_albums = group_data.get(group_name_upper, {}).get('albums', [])
-
-    new_peak_text = ""
-    # Check for new peak: if current rank is the lowest (best) rank achieved so far, and it's charting
-    if calculated_rank is not None and calculated_rank == chart_info['peak']:
-        # Only mark as "new peak" if it's actually an improvement or the first recorded rank that's charting
-        if chart_info['prev_rank'] is None or calculated_rank < chart_info['prev_rank']:
-            new_peak_text = "*new peak"
-
+    
+    for album_name in group_albums:
+        album_entry = album_data.get(album_name, {})
+        if album_entry.get('is_active_promotion'):
+            return album_name
+    
     return None
 
 
@@ -1899,8 +1883,6 @@ async def charts(interaction: discord.Interaction, group_name: str):
     if group_data[group_name_upper].get('is_disbanded'):
         await interaction.response.send_message(f"❌ Cannot show charts for {group_name_upper} as they are disbanded.", ephemeral=True)
         return
-
-       _refresh_all_chart_ranks()
 
     refresh_chart_snapshot()
     active_album_name = _get_active_album_for_group(group_name_upper)
@@ -1920,7 +1902,7 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
     # Display group name and album name without "ULT" or quotes
     report_lines.append(f"<:SNS_Titter:1355910325115031642> **{group_name_upper} {active_album_name} {current_date_formatted} Update**\n")
-if album_entry.get('release_timestamp'):
+    if album_entry.get('release_timestamp'):
         stream_line, view_line = format_debut_announcement(
             active_album_name,
             group_name_upper,
@@ -1968,7 +1950,7 @@ if album_entry.get('release_timestamp'):
     else:
         report_lines.append(f"*{active_album_name} by {group_name_upper} is not currently charting on any major platform.*")
 
- recent_history = album_entry.get('stream_history', [])[-3:]
+    recent_history = album_entry.get('stream_history', [])[-3:]
     if recent_history:
         report_lines.append("\n__Recent Streams__")
         for history_entry in recent_history:
@@ -2620,5 +2602,4 @@ PAYOLA_ITEMS = {
 }
 
 
-# === RUN ===
 bot.run(TOKEN)
