@@ -39,6 +39,13 @@ user_cooldowns = {} # user_id: {command_name: last_used_datetime}
 user_daily_limits = {} # user_id: {command_name: {date: count}}
 latest_chart_snapshot = {}  # Stores the last generated chart snapshot for reference
 
+DEFAULT_GROUP_TRAITS = {
+    'fanbase': 60,
+    'gp_interest': 55,
+    'virality': 50,
+    'company_power': 50,
+}
+
 def _generate_album_attributes_for_group(group_name: str):
     group_popularity_score = group_data.get(group_name, {}).get('popularity', 100)
     return {
@@ -95,6 +102,10 @@ def load_data():
                 loaded_group_data = loaded_data.get('group_data', {})
                 for group_name, data in loaded_group_data.items():
                     data.setdefault('is_disbanded', False) # Add is_disbanded field with default False
+                    data.setdefault('fanbase', DEFAULT_GROUP_TRAITS['fanbase'])
+                    data.setdefault('gp_interest', DEFAULT_GROUP_TRAITS['gp_interest'])
+                    data.setdefault('virality', DEFAULT_GROUP_TRAITS['virality'])
+                    data.setdefault('company_power', DEFAULT_GROUP_TRAITS['company_power'])
                     group_data[group_name] = data
 
                 loaded_album_data = loaded_data.get('album_data', {})
@@ -215,6 +226,20 @@ def format_number(num):
     if num >= 1_000_000: return f"{num / 1_000_000:.1f}M"
     if num >= 1_000: return f"{num / 1_000:.1f}K"
     return str(num)
+    
+    def clamp(value: int, minimum: int, maximum: int):
+    return max(minimum, min(value, maximum))
+
+
+def _generate_group_traits(investment: int = 0):
+    adjusted_investment = max(0, investment)
+    return {
+        'fanbase': clamp(DEFAULT_GROUP_TRAITS['fanbase'] + adjusted_investment // 200000, 40, 100),
+        'gp_interest': clamp(DEFAULT_GROUP_TRAITS['gp_interest'] + adjusted_investment // 250000, 35, 100),
+        'virality': clamp(DEFAULT_GROUP_TRAITS['virality'] + adjusted_investment // 150000, 30, 100),
+        'company_power': clamp(DEFAULT_GROUP_TRAITS['company_power'] + adjusted_investment // 300000, 30, 120),
+    }
+
     def is_within_first_24h(album_entry: dict) -> bool:
     """Check if the album is within its first 24 hours of release."""
     release_timestamp = album_entry.get('release_timestamp')
@@ -607,6 +632,34 @@ async def newpost(interaction: discord.Interaction, group_name: str):
     )
 
 # === FEATURES IMPLEMENTATION ===
+PLATFORM_AUDIENCE_WEIGHTS = {
+    "MelOn": {"fanbase": 0.35, "gp_interest": 0.35, "virality": 0.15, "company_power": 0.15},
+    "Genie": {"fanbase": 0.4, "gp_interest": 0.3, "virality": 0.1, "company_power": 0.2},
+    "Bugs": {"fanbase": 0.3, "gp_interest": 0.25, "virality": 0.3, "company_power": 0.15},
+    "FLO": {"fanbase": 0.25, "gp_interest": 0.35, "virality": 0.25, "company_power": 0.15},
+    "YouTube": {"fanbase": 0.2, "gp_interest": 0.2, "virality": 0.45, "company_power": 0.15},
+}
+
+
+def calculate_platform_multipliers(group_entry: dict):
+    traits = {
+        'fanbase': group_entry.get('fanbase', DEFAULT_GROUP_TRAITS['fanbase']),
+        'gp_interest': group_entry.get('gp_interest', DEFAULT_GROUP_TRAITS['gp_interest']),
+        'virality': group_entry.get('virality', DEFAULT_GROUP_TRAITS['virality']),
+        'company_power': group_entry.get('company_power', DEFAULT_GROUP_TRAITS['company_power']),
+    }
+
+    multipliers = {}
+    for platform, weights in PLATFORM_AUDIENCE_WEIGHTS.items():
+        weight_total = sum(weights.values()) or 1
+        weighted_score = sum(traits[key] * weight for key, weight in weights.items()) / weight_total
+
+        baseline_boost = 0.85 + (traits['company_power'] / 120) # company power raises baseline promo boosts
+        spike_window = 0.1 + (traits['virality'] / 200) + (traits['company_power'] / 300) # widens spike magnitude
+        platform_multiplier = max(0.1, (baseline_boost + (weighted_score / 100)))
+        multipliers[platform] = platform_multiplier * random.uniform(1 - spike_window, 1 + spike_window)
+
+    return multipliers
 
 @bot.tree.command(description="Stream an album and add to its count!")
 async def streams(interaction: discord.Interaction, album_name: str):
@@ -634,23 +687,30 @@ async def streams(interaction: discord.Interaction, album_name: str):
         await interaction.response.send_message(f"❌ Cannot stream for {group_name} as they are disbanded.", ephemeral=True)
         return
 
-    group_current_popularity = group_data[group_name].get('popularity', 0)
+   group_entry = group_data[group_name]
+    group_current_popularity = group_entry.get('popularity', 0)
 
-    base_streams = group_current_popularity * 100
-    streams_to_add = max(100, int(random.gauss(mu=base_streams, sigma=group_current_popularity * 50)))
+    platform_multipliers = calculate_platform_multipliers(group_entry)
+    average_multiplier = sum(platform_multipliers.values()) / len(platform_multipliers)
+
+    base_streams = group_current_popularity * 100 * average_multiplier
+    spike_magnifier = 1 + (group_entry.get('company_power', DEFAULT_GROUP_TRAITS['company_power']) / 150)
+    streams_to_add = max(100, int(random.gauss(mu=base_streams, sigma=group_current_popularity * 50 * spike_magnifier)))
 
     current_album_data['streams'] = current_album_data.get('streams', 0) + streams_to_add
-    album_data[album_name] = current_album_data 
+    album_data[album_name] = current_album_data
 
     update_cooldown(user_id, "streams")
     save_data() 
     embed = discord.Embed(
-        title=album_name, 
+        title=album_name,
         description=f"**{group_name}** • Album",
         color=discord.Color.blue()
     )
     embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
     embed.add_field(name="Streams Added", value=f"{format_number(streams_to_add)}", inline=True)
+     top_platform = max(platform_multipliers.items(), key=lambda item: item[1])
+    embed.add_field(name="Promo Boost", value=f"{average_multiplier:.2f}x avg ({top_platform[0]} {top_platform[1]:.2f}x)", inline=True)
     embed.set_footer(text=f"Total Streams: {format_number(current_album_data['streams'])}")
 
     await interaction.response.send_message(embed=embed)
@@ -1210,12 +1270,13 @@ async def addgroup(
     # Create group entry
     new_group_data = {
         'company': company_name_upper, # Use the passed company name
-        'albums': [], 
+        'albums': [],
         'korean_name': korean_name,
-        'wins': initial_wins, 
-        'popularity': 100, 
+        'wins': initial_wins,
+        'popularity': 100,
         'debut_date': datetime.now().strftime("%Y-%m-%d"),
-        'is_disbanded': False # Newly created group is not disbanded
+        'is_disbanded': False, # Newly created group is not disbanded
+        **_generate_group_traits(),
     }
     group_data[group_name_upper] = new_group_data
     group_popularity[group_name_upper] = new_group_data['popularity']
@@ -1276,9 +1337,10 @@ async def debut(
         'albums': [album_name],
         'korean_name': korean_name,
         'wins': 0,
-        'popularity': 100 + (investment // 100000), 
+        'popularity': 100 + (investment // 100000),
         'debut_date': datetime.now().strftime("%Y-%m-%d"),
-        'is_disbanded': False # Newly debuted group is not disbanded
+        'is_disbanded': False, # Newly debuted group is not disbanded
+        **_generate_group_traits(investment),
     }
     group_data[group_name_upper] = new_group_data
     group_popularity[group_name_upper] = new_group_data['popularity']
@@ -1931,6 +1993,16 @@ async def view_group(interaction: discord.Interaction, group_name: str):
         status = "Disbanded"
     embed.add_field(name="Status", value=status, inline=True)
 
+    embed.add_field(
+        name="Audience Profile",
+        value=(
+            f"Fanbase: {group_info.get('fanbase', DEFAULT_GROUP_TRAITS['fanbase'])}\n"
+            f"GP Interest: {group_info.get('gp_interest', DEFAULT_GROUP_TRAITS['gp_interest'])}\n"
+            f"Virality: {group_info.get('virality', DEFAULT_GROUP_TRAITS['virality'])}\n"
+            f"Company Power: {group_info.get('company_power', DEFAULT_GROUP_TRAITS['company_power'])}"
+        ),
+        inline=False
+    )
 
     # List albums
     albums_list = group_info.get('albums', [])
