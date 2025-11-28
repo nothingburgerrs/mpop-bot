@@ -33,6 +33,7 @@ group_popularity = {} # group_name: popularity_score
 company_funds = {} # company_name: funds
 group_data = {}  # group_name: dict with 'company', 'albums', 'korean_name', 'wins', 'popularity', 'debut_date', 'is_disbanded'
 album_data = {}  # album_name: dict with 'group', 'wins', 'release_date', 'streams', 'sales', 'image_url', 'is_active_promotion', 'promotion_end_date', 'charts_info', 'fanbase_size', 'gp_interest', 'promo_power', 'virality_potential', 'stream_history'
+stream_logs = []  # List of {user_id, album_name, timestamp}
 user_balances = {}  # user_id: balance
 user_companies = {}  # user_id: [company_name1, company_name2, ...]
 user_cooldowns = {} # user_id: {command_name: last_used_datetime}
@@ -90,7 +91,7 @@ def _ensure_album_defaults(album_name: str, album_entry: dict):
 
 def load_data():
     """Loads data from data.json into global dictionaries."""
-    global group_popularity, company_funds, group_data, album_data, user_balances, user_companies, user_cooldowns, user_daily_limits, latest_chart_snapshot
+    global group_popularity, company_funds, group_data, album_data, user_balances, user_companies, user_cooldowns, user_daily_limits, latest_chart_snapshot, stream_logs
 
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r') as f:
@@ -165,6 +166,7 @@ def load_data():
                     }
 
                 user_daily_limits.update(loaded_data.get('user_daily_limits', {}))
+                stream_logs = loaded_data.get('stream_logs', [])
 
                 print("Data loaded from data.json successfully!")
             except json.JSONDecodeError:
@@ -183,6 +185,7 @@ def save_data():
         'user_cooldowns': user_cooldowns,
         'user_daily_limits': user_daily_limits,
         'user_companies': user_companies, # Ensure user_companies is always saved
+        'stream_logs': stream_logs
         'latest_chart_snapshot': latest_chart_snapshot
     }
     # Custom encoder for datetime objects
@@ -300,6 +303,43 @@ def update_cooldown(user_id: str, command_name: str):
         user_cooldowns[user_id] = {}
     user_cooldowns[user_id][command_name] = datetime.now()
     save_data()
+    
+def log_stream_usage(user_id: str, album_name: str):
+    """Record a stream command usage for analytics."""
+    stream_logs.append(
+        {
+            'user_id': user_id,
+            'album_name': album_name,
+            'timestamp': datetime.now().isoformat()
+        }
+    )
+
+
+def get_user_stream_counts(user_id: str, days: int | None = None):
+    """Return album stream counts for a user, optionally filtered by a lookback window in days."""
+    threshold = datetime.now() - timedelta(days=days) if days else None
+    counts = {}
+
+    for entry in stream_logs:
+        if entry.get('user_id') != user_id:
+            continue
+
+        if threshold:
+            ts = entry.get('timestamp')
+            try:
+                ts_dt = datetime.fromisoformat(ts) if isinstance(ts, str) else ts
+            except ValueError:
+                continue
+            if ts_dt < threshold:
+                continue
+
+        album_name = entry.get('album_name')
+        if not album_name:
+            continue
+
+        counts[album_name] = counts.get(album_name, 0) + 1
+
+    return counts
 
 def check_daily_limit(user_id: str, command_name: str, max_uses: int):
     """Checks and updates daily command usage."""
@@ -701,7 +741,8 @@ async def streams(interaction: discord.Interaction, album_name: str):
     album_data[album_name] = current_album_data
 
     update_cooldown(user_id, "streams")
-    save_data() 
+    log_stream_usage(user_id, album_name)
+    save_data()
     embed = discord.Embed(
         title=album_name,
         description=f"**{group_name}** • Album",
@@ -721,6 +762,57 @@ async def streams(interaction: discord.Interaction, album_name: str):
             await interaction.channel.send("someone tag nugupromoter <:lmfaooo:1162576419486974022>")
         except discord.errors.Forbidden:
             print(f"ERROR: Missing permissions to send public 'nugupromoter' message in channel {interaction.channel.id}")
+
+@bot.tree.command(description="Show your most-streamed albums from /streams usage")
+@app_commands.describe(
+    top_n="How many top albums to display (default 5)",
+    days="Limit to streams within the past N days (optional)",
+    user="Show favorites for a specific user (defaults to you)"
+)
+async def favs(
+    interaction: discord.Interaction,
+    top_n: int = 5,
+    days: int | None = None,
+    user: discord.User | None = None
+):
+    target_user = user or interaction.user
+    target_user_id = str(target_user.id)
+
+    if top_n <= 0:
+        await interaction.response.send_message("❌ top_n must be greater than 0.", ephemeral=True)
+        return
+
+    if days is not None and days <= 0:
+        await interaction.response.send_message("❌ days must be greater than 0 when provided.", ephemeral=True)
+        return
+
+    counts = get_user_stream_counts(target_user_id, days)
+    if not counts:
+        timeframe = f"last {days} days" if days else "all time"
+        await interaction.response.send_message(
+            f"ℹ️ No stream history for {target_user.display_name} ({timeframe}).",
+            ephemeral=True
+        )
+        return
+
+    sorted_counts = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+    top_albums = sorted_counts[:top_n]
+
+    timeframe_label = f"last {days} days" if days else "all time"
+    description_lines = [
+        f"**{idx + 1}. {album}** — {count} streams"
+        for idx, (album, count) in enumerate(top_albums)
+    ]
+
+    embed = discord.Embed(
+        title=f"{target_user.display_name}'s favorite albums",
+        description="\n".join(description_lines),
+        color=discord.Color.gold()
+    )
+    embed.set_footer(text=f"Based on /streams usage ({timeframe_label})")
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 
 @bot.tree.command(description="Watch a music video to add YouTube views!")
 async def views(interaction: discord.Interaction, album_name: str):
