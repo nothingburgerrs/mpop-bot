@@ -37,6 +37,7 @@ user_balances = {}  # user_id: balance
 user_companies = {}  # user_id: [company_name1, company_name2, ...]
 user_cooldowns = {} # user_id: {command_name: last_used_datetime}
 user_daily_limits = {} # user_id: {command_name: {date: count}}
+latest_chart_snapshot = {}  # Stores the last generated chart snapshot for reference
 
 def _generate_album_attributes_for_group(group_name: str):
     group_popularity_score = group_data.get(group_name, {}).get('popularity', 100)
@@ -82,7 +83,7 @@ def _ensure_album_defaults(album_name: str, album_entry: dict):
 
 def load_data():
     """Loads data from data.json into global dictionaries."""
-    global group_popularity, company_funds, group_data, album_data, user_balances, user_companies, user_cooldowns, user_daily_limits
+    global group_popularity, company_funds, group_data, album_data, user_balances, user_companies, user_cooldowns, user_daily_limits, latest_chart_snapshot
 
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, 'r') as f:
@@ -112,6 +113,8 @@ def load_data():
                     album_data[album_name] = data
 
                 user_balances.update(loaded_data.get('user_balances', {}))
+                
+                latest_chart_snapshot.update(loaded_data.get('latest_chart_snapshot', {}))
 
                 # Handle user_companies: convert single string to list if old format
                 # Ensure user_companies is properly loaded, defaulting to an empty dict if not found
@@ -148,7 +151,8 @@ def save_data():
         'user_balances': user_balances,
         'user_cooldowns': user_cooldowns,
         'user_daily_limits': user_daily_limits,
-        'user_companies': user_companies # Ensure user_companies is always saved
+        'user_companies': user_companies, # Ensure user_companies is always saved
+        'latest_chart_snapshot': latest_chart_snapshot
     }
     # Custom encoder for datetime objects
     class DateTimeEncoder(json.JSONEncoder):
@@ -1407,11 +1411,11 @@ async def companies(interaction: discord.Interaction):
 
 # CHART_CONFIG for realism - Adjusted based on user's feedback for more achievable charting
 CHART_CONFIG = {
-    "MelOn": {"max_rank": 200, "stream_sensitivity": 0.0000003, "charting_threshold": 120}, # Hardest #1, but achievable
-    "Genie": {"max_rank": 150, "stream_sensitivity": 0.0000006, "charting_threshold": 90},
+    "MelOn": {"max_rank": 200, "stream_sensitivity": 0.0000003, "charting_threshold": 120, "recency_weight": 15, "virality_weight": 5}, # Hardest #1, but achievable
+    "Genie": {"max_rank": 150, "stream_sensitivity": 0.0000006, "charting_threshold": 90, "recency_weight": 12, "virality_weight": 5},
     # Adjusted Bugs: Lower sensitivity (harder to chart high), higher max_rank and charting_threshold for more spread
-    "Bugs": {"max_rank": 100, "stream_sensitivity": 0.0000005, "charting_threshold": 70}, 
-    "FLO": {"max_rank": 80, "stream_sensitivity": 0.000001, "charting_threshold": 60},
+  "Bugs": {"max_rank": 100, "stream_sensitivity": 0.0000005, "charting_threshold": 70, "recency_weight": 10, "virality_weight": 4},
+    "FLO": {"max_rank": 80, "stream_sensitivity": 0.000001, "charting_threshold": 60, "recency_weight": 8, "virality_weight": 3},
 }
 
 
@@ -1486,37 +1490,135 @@ def _get_chart_info(album_entry: dict, chart_type: str):
 
     return album_entry['charts_info'][chart_type]
 
-def _update_and_format_chart_line(album_entry: dict, chart_name: str, calculated_rank: int | None, *, format_only: bool = True):
-    """Updates chart info for an album and optionally returns a formatted string for the report."""
+def _deactivate_album(album_entry: dict):
+    """Deactivate an album promotion and clear its chart data."""
+    album_entry['is_active_promotion'] = False
+    album_entry['promotion_end_date'] = None
+    if 'charts_info' not in album_entry:
+        album_entry['charts_info'] = {}
+    for chart_key in CHART_CONFIG.keys():
+        album_entry['charts_info'][chart_key] = {'rank': None, 'peak': None, 'prev_rank': None}
+
+
+def _is_album_promotion_active(album_entry: dict):
+    """Check if an album is still within its promotion window."""
+    if not album_entry.get('is_active_promotion'):
+        return False
+
+    promo_end_date = album_entry.get('promotion_end_date')
+    if promo_end_date and datetime.now() > promo_end_date:
+        _deactivate_album(album_entry)
+        return False
+
+    return True
+
+
+def _compute_recency_score(release_date_str: str, now: datetime):
+    """Compute a recency score that favors newer releases within a 6-month window."""
+    try:
+        release_date = datetime.fromisoformat(release_date_str)
+    except (TypeError, ValueError):
+        return 0
+
+    days_since_release = (now - release_date).days
+    recency_window_days = 180
+    if days_since_release < 0:
+        days_since_release = 0
+
+    if days_since_release >= recency_window_days:
+        return 0
+
+    return (recency_window_days - days_since_release) / recency_window_days
+
+
+def _compute_virality_bonus(identifier: str):
+    """Deterministic virality bonus used as a stable tie-breaker."""
+    return (abs(hash(identifier)) % 1000) / 1000
+
+
+def _update_chart_info(album_entry: dict, chart_name: str, new_rank: int):
+    """Update chart fields for an album with the freshly calculated rank."""
     chart_info = _get_chart_info(album_entry, chart_name)
+        chart_info['prev_rank'] = chart_info.get('rank')
+    chart_info['rank'] = new_rank
 
-    # Store current rank as previous for the next update
-    chart_info['prev_rank'] = chart_info['rank']
-    chart_info['rank'] = calculated_rank
+    if new_rank is not None:
+        if chart_info['peak'] is None or new_rank < chart_info['peak']:
+            chart_info['peak'] = new_rank
 
-    # Update peak rank (lower number is better)
- if calculated_rank is not None and (chart_info['peak'] is None or calculated_rank < chart_info['peak']):
-        chart_info['peak'] = calculated_rank
+
+def refresh_chart_snapshot():
+    """Recalculate chart standings for all active albums and persist a snapshot."""
+    now = datetime.now()
+    active_albums = {}
+
+     for album_name, album_entry in album_data.items():
+        if _is_album_promotion_active(album_entry):
+            active_albums[album_name] = album_entry
+
+    snapshot = {"generated_at": now.isoformat(), "platforms": {}}
 
   if not format_only:
         return None
 
-    # --- Formatting the line ---
-    rank_str = f"#{calculated_rank}" if calculated_rank is not None else "N/A"
+  for platform_name, settings in CHART_CONFIG.items():
+        platform_results = []
+        for album_name, album_entry in active_albums.items():
+            streams = album_entry.get('streams', 0)
+            recency_score = _compute_recency_score(album_entry.get('release_date'), now)
+            virality_score = _compute_virality_bonus(f"{album_name}:{album_entry.get('group', '')}")
 
-    rank_change_text = ""
-    is_new_entry = (chart_info['prev_rank'] is None and calculated_rank is not None)
+            stream_component = streams * settings['stream_sensitivity']
+            recency_component = recency_score * settings.get('recency_weight', 0)
+            virality_component = virality_score * settings.get('virality_weight', 0)
+            total_score = stream_component + recency_component + virality_component
 
-    if is_new_entry:
-        rank_change_text = "(NEW)"
-    elif calculated_rank is not None and chart_info['prev_rank'] is not None:
-        change = chart_info['prev_rank'] - calculated_rank # Positive if rank improved (lower number)
-        if change > 0:
-            rank_change_text = f"(+{change})"
-        elif change < 0:
-            rank_change_text = f"({change})" # Already has a minus sign
-        else:
-            rank_change_text = "(=)"
+            platform_results.append({
+                'album': album_name,
+                'group': album_entry.get('group'),
+                'score': total_score,
+                'streams': streams,
+                'recency_score': recency_score,
+                'virality_score': virality_score
+            })
+
+        sorted_results = sorted(
+            platform_results,
+            key=lambda entry: (
+                -entry['score'],
+                -entry['streams'],
+                -entry['recency_score'],
+                -entry['virality_score'],
+                entry['album']
+            )
+        )
+
+        chart_cutoff = settings.get('charting_threshold', settings['max_rank'])
+        platform_snapshot = []
+        for idx, entry in enumerate(sorted_results, start=1):
+            rank_value = idx if idx <= chart_cutoff else None
+            album_entry = album_data.get(entry['album'])
+            _update_chart_info(album_entry, platform_name, rank_value)
+
+            if rank_value is not None and idx <= settings['max_rank']:
+                platform_snapshot.append({
+                    'album': entry['album'],
+                    'group': entry['group'],
+                    'rank': rank_value,
+                    'score': round(entry['score'], 4),
+                    'streams': entry['streams']
+                })
+
+        snapshot['platforms'][platform_name] = platform_snapshot
+
+    latest_chart_snapshot.clear()
+    latest_chart_snapshot.update(snapshot)
+    save_data()
+    return snapshot
+
+def _get_active_album_for_group(group_name_upper: str):
+    """Return the active album for a group if one exists."""
+    group_albums = group_data.get(group_name_upper, {}).get('albums', [])
 
     new_peak_text = ""
     # Check for new peak: if current rank is the lowest (best) rank achieved so far, and it's charting
@@ -1525,7 +1627,7 @@ def _update_and_format_chart_line(album_entry: dict, chart_name: str, calculated
         if chart_info['prev_rank'] is None or calculated_rank < chart_info['prev_rank']:
             new_peak_text = "*new peak"
 
-    return f"{rank_str} {chart_name} {rank_change_text} {new_peak_text}".strip()
+    return None
 
 
 @bot.tree.command(description="Display music charts for a group's active album.")
@@ -1545,15 +1647,8 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
        _refresh_all_chart_ranks()
 
-    # Find the active album for the group
-    active_album_name = None
-    group_albums = group_data[group_name_upper].get('albums', [])
-
-    for album_name in group_albums:
-        album_entry = album_data.get(album_name)
-    if album_entry and _is_album_promotion_active(album_entry):
-            active_album_name = album_name
-            break # Found the active album
+    refresh_chart_snapshot()
+    active_album_name = _get_active_album_for_group(group_name_upper)
 
     if not active_album_name:
         await interaction.response.send_message(f"❌ No active album found for `{group_name}`. Please set a promotion period using `/promoperiod`.", ephemeral=True)
@@ -1561,7 +1656,6 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
     album_entry = album_data[active_album_name]
     _ensure_album_defaults(active_album_name, album_entry)
-    album_streams = album_entry.get('streams', 0)
     group_korean_name = group_data[group_name_upper].get('korean_name', '')
 
     report_lines = []
@@ -1596,7 +1690,7 @@ async def charts(interaction: discord.Interaction, group_name: str):
 
             new_peak_text = ""
             if current_rank == peak_rank and (prev_rank is None or current_rank < prev_rank):
-                 new_peak_text = "*new peak"
+                new_peak_text = "*new peak"
 
             final_chart_display.append((current_rank, f"{rank_str} {platform_name} {rank_change_text} {new_peak_text}".strip()))
 
@@ -1641,8 +1735,6 @@ async def charts(interaction: discord.Interaction, group_name: str):
     final_hashtags_block.append(f"**{album_hashtag}**")
 
     report_lines.append("\n" + "\n".join(final_hashtags_block)) # Add newline before hashtags
-
-    save_data() # Save the updated chart info after calculation
 
     await interaction.response.send_message("\n".join(report_lines))
 @bot.tree.command(description="View streaming stats and momentum for an album.")
