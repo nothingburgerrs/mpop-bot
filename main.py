@@ -1729,7 +1729,7 @@ async def sales(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{bulk_text} • Physical Album",
         color=discord.Color.gold() if went_bulk else discord.Color.green()
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
     embed.add_field(name="Bought", value=f"+{format_number(sales_to_add)}", inline=True)
     embed.add_field(name="Stock Left", value=f"{format_number(current_album_data['stock'])}", inline=True)
     embed.set_footer(text=f"Total Sales: {format_number(current_album_data['sales'])} | {remaining_uses} uses left today")
@@ -2131,7 +2131,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text}" + (" (inactive)" if is_disbanded else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.set_footer(text=f"Total: {format_number(current_album_data['streams'])} | {remaining_uses} uses left today")
 
@@ -3700,8 +3700,8 @@ async def boycott(interaction: discord.Interaction, group_name: str, boycott_typ
     
     # Daily limit check (1 per day per user)
     today = get_today_str()
-    user_daily.setdefault(user_id, {})
-    boycott_uses = user_daily[user_id].get('boycott', {})
+    user_daily_limits.setdefault(user_id, {})
+    boycott_uses = user_daily_limits[user_id].get('boycott', {})
     if boycott_uses.get('date') == today and boycott_uses.get('count', 0) >= 1:
         await interaction.response.send_message("❌ You can only start 1 boycott per day!", ephemeral=True)
         return
@@ -3778,9 +3778,9 @@ async def boycott(interaction: discord.Interaction, group_name: str, boycott_typ
 
     # Track daily usage
     if boycott_uses.get('date') != today:
-        user_daily[user_id]['boycott'] = {'date': today, 'count': 1}
+        user_daily_limits[user_id]['boycott'] = {'date': today, 'count': 1}
     else:
-        user_daily[user_id]['boycott']['count'] = boycott_uses.get('count', 0) + 1
+        user_daily_limits[user_id]['boycott']['count'] = boycott_uses.get('count', 0) + 1
     save_data()
     
     await interaction.response.send_message(embed=embed)
@@ -3913,8 +3913,8 @@ async def truck(interaction: discord.Interaction, target: str, truck_type: str, 
     
     # Daily limit check (1 per day per user)
     today = get_today_str()
-    user_daily.setdefault(user_id, {})
-    truck_uses = user_daily[user_id].get('truck', {})
+    user_daily_limits.setdefault(user_id, {})
+    truck_uses = user_daily_limits[user_id].get('truck', {})
     if truck_uses.get('date') == today and truck_uses.get('count', 0) >= 1:
         await interaction.response.send_message("❌ You can only send 1 truck per day!", ephemeral=True)
         return
@@ -4058,9 +4058,9 @@ async def truck(interaction: discord.Interaction, target: str, truck_type: str, 
 
     # Track daily usage
     if truck_uses.get('date') != today:
-        user_daily[user_id]['truck'] = {'date': today, 'count': 1}
+        user_daily_limits[user_id]['truck'] = {'date': today, 'count': 1}
     else:
-        user_daily[user_id]['truck']['count'] = truck_uses.get('count', 0) + 1
+        user_daily_limits[user_id]['truck']['count'] = truck_uses.get('count', 0) + 1
     save_data()
 
     await interaction.response.send_message(embed=embed)
@@ -6394,7 +6394,7 @@ async def views(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text} • Music Video",
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.red())
     )
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     embed.add_field(name="Views Added", value=f"+{format_number(total_views_added)}", inline=True)
     if went_viral:
         embed.add_field(name="🔥 Viral Bonus", value=f"+{format_number(result['viral_bonus'])}", inline=True)
@@ -7095,8 +7095,8 @@ async def article(interaction: discord.Interaction, group_name: str):
     
     # Daily limit check (5 per day per user)
     today = get_today_str()
-    user_daily.setdefault(user_id, {})
-    article_uses = user_daily[user_id].get('article', {})
+    user_daily_limits.setdefault(user_id, {})
+    article_uses = user_daily_limits[user_id].get('article', {})
     if article_uses.get('date') == today and article_uses.get('count', 0) >= 5:
         await interaction.response.send_message("❌ You can only release 5 articles per day!", ephemeral=True)
         return
@@ -7109,12 +7109,12 @@ async def article(interaction: discord.Interaction, group_name: str):
     
     # Track daily usage
     if article_uses.get('date') != today:
-        user_daily[user_id]['article'] = {'date': today, 'count': 1}
+        user_daily_limits[user_id]['article'] = {'date': today, 'count': 1}
     else:
-        user_daily[user_id]['article']['count'] = article_uses.get('count', 0) + 1
+        user_daily_limits[user_id]['article']['count'] = article_uses.get('count', 0) + 1
     save_data()
-    
-    remaining = 5 - user_daily[user_id]['article']['count']
+
+    remaining = 5 - user_daily_limits[user_id]['article']['count']
     
     embed = discord.Embed(
         title=f"📰 Release Article - {group_name_upper}",
@@ -7851,7 +7851,7 @@ async def addsongs(interaction: discord.Interaction, album_name: str, songs: str
     if existing_streams > 0:
         embed.set_footer(text=f"📊 {format_number(existing_streams)} existing streams distributed to songs!")
     
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     
     await interaction.response.send_message(embed=embed)
 
@@ -7896,7 +7896,7 @@ async def albumsongs(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     embed.set_footer(text=f"Album Total Streams: {format_number(album_entry.get('streams', 0))}")
     
     await interaction.response.send_message(embed=embed)
@@ -7984,7 +7984,7 @@ async def view_album(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     
     await interaction.response.send_message(embed=embed)
 
@@ -8087,7 +8087,7 @@ async def editalbum_songs(
     )
     embed.add_field(name="Changes", value="\n".join(changes), inline=False)
     embed.add_field(name="Total Songs", value=str(len(existing_songs)), inline=True)
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     
     await interaction.response.send_message(embed=embed)
 
@@ -8167,7 +8167,7 @@ async def fixalbumstreams(interaction: discord.Interaction, album_name: str):
     
     embed.add_field(name="New Distribution", value="\n".join(song_display), inline=False)
     embed.set_footer(text=f"Total: {format_number(total_streams)} streams | Title gets 60%, b-sides share the rest")
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     
     await interaction.response.send_message(embed=embed)
 
@@ -8322,7 +8322,7 @@ async def streamsong(interaction: discord.Interaction, album_name: str, song_nam
         description=f"from **{album_name}** • **{group_name}**{viral_text}" + (" (Title Track)" if is_title else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=album_entry.get('image_url', DEFAULT_ALBUM_IMAGE))
+    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.add_field(name="Song Total", value=f"{format_number(songs[matched_song]['streams'])}", inline=True)
     embed.set_footer(text=f"Album Total: {format_number(album_entry['streams'])} | {remaining_uses} uses left today")
