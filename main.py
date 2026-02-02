@@ -26,6 +26,19 @@ DATA_FILE = "data.json"
 # Default placeholder image for albums
 DEFAULT_ALBUM_IMAGE = "https://placehold.co/128x128.png?text=Album"
 
+import re as _re
+def sanitize_url(url, fallback=None):
+    """Extract a raw URL from a possible markdown link like [text](url), or return fallback if invalid."""
+    if not url or not isinstance(url, str):
+        return fallback or DEFAULT_ALBUM_IMAGE
+    url = url.strip()
+    md_match = _re.match(r'\[.*?\]\((https?://[^)]+)\)', url)
+    if md_match:
+        return md_match.group(1)
+    if url.startswith(('http://', 'https://')):
+        return url
+    return fallback or DEFAULT_ALBUM_IMAGE
+
 # Hidden canonical groups - receive silent bonuses (not displayed anywhere)
 _CANONICAL_GROUPS = {"H10N-Y", "HOUR*LY", "ROM.COM"}
 
@@ -1729,7 +1742,7 @@ async def sales(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{bulk_text} • Physical Album",
         color=discord.Color.gold() if went_bulk else discord.Color.green()
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(current_album_data.get('image_url')))
     embed.add_field(name="Bought", value=f"+{format_number(sales_to_add)}", inline=True)
     embed.add_field(name="Stock Left", value=f"{format_number(current_album_data['stock'])}", inline=True)
     embed.set_footer(text=f"Total Sales: {format_number(current_album_data['sales'])} | {remaining_uses} uses left today")
@@ -2131,7 +2144,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text}" + (" (inactive)" if is_disbanded else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(current_album_data.get('image_url')))
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.set_footer(text=f"Total: {format_number(current_album_data['streams'])} | {remaining_uses} uses left today")
 
@@ -6394,7 +6407,7 @@ async def views(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text} • Music Video",
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.red())
     )
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.add_field(name="Views Added", value=f"+{format_number(total_views_added)}", inline=True)
     if went_viral:
         embed.add_field(name="🔥 Viral Bonus", value=f"+{format_number(result['viral_bonus'])}", inline=True)
@@ -7355,7 +7368,7 @@ async def releasealbum(interaction: discord.Interaction, group_name: str, album_
     embed.add_field(name="Remaining Stock", value=f"{format_number(remaining_stock)}", inline=True)
     if preorder_sales > 0:
         embed.add_field(name="Revenue from Preorders", value=f"<:MonthlyPeso:1338642658436059239>{format_number(preorder_sales * 10)}", inline=True)
-    embed.set_thumbnail(url=image_url or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(image_url))
     
     await interaction.response.send_message(embed=embed)
 
@@ -7851,7 +7864,7 @@ async def addsongs(interaction: discord.Interaction, album_name: str, songs: str
     if existing_streams > 0:
         embed.set_footer(text=f"📊 {format_number(existing_streams)} existing streams distributed to songs!")
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -7896,7 +7909,7 @@ async def albumsongs(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.set_footer(text=f"Album Total Streams: {format_number(album_entry.get('streams', 0))}")
     
     await interaction.response.send_message(embed=embed)
@@ -7984,7 +7997,7 @@ async def view_album(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8087,7 +8100,7 @@ async def editalbum_songs(
     )
     embed.add_field(name="Changes", value="\n".join(changes), inline=False)
     embed.add_field(name="Total Songs", value=str(len(existing_songs)), inline=True)
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8167,7 +8180,7 @@ async def fixalbumstreams(interaction: discord.Interaction, album_name: str):
     
     embed.add_field(name="New Distribution", value="\n".join(song_display), inline=False)
     embed.set_footer(text=f"Total: {format_number(total_streams)} streams | Title gets 60%, b-sides share the rest")
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8322,7 +8335,7 @@ async def streamsong(interaction: discord.Interaction, album_name: str, song_nam
         description=f"from **{album_name}** • **{group_name}**{viral_text}" + (" (Title Track)" if is_title else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.add_field(name="Song Total", value=f"{format_number(songs[matched_song]['streams'])}", inline=True)
     embed.set_footer(text=f"Album Total: {format_number(album_entry['streams'])} | {remaining_uses} uses left today")
