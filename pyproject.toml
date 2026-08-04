@@ -1,13 +1,11 @@
 [project]
-name = "python-template"
+name = "mpopbot"
 version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
+description = "Multiplayer K-pop management sandbox Discord bot"
 requires-python = ">=3.11"
 dependencies = [
-    "discord-py>=2.5.2",
-    "discord-py-interactions==5.13.2",
-    "firebase-admin>=6.9.0",
-    "flask==3.1.0",
-    "python-dotenv==1.0.1",
+    "discord.py>=2.5.2",
+    "python-dotenv>=1.0.1",
+    "Pillow>=10.0.0",
+    "aiohttp>=3.9.0",
 ]

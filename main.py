@@ -8,6 +8,11 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 import asyncio
 import json
+import traceback
+import aiohttp # For fetching era art when rendering show graphics
+import graphics # Template-based show boards (see graphics.py)
+import dashboard_api # In-process management API for the web dashboard
+import tunnel # Optional Cloudflare Tunnel that exposes the dashboard API
 from PIL import Image, ImageDraw, ImageFont
 import calendar
 
@@ -25,6 +30,19 @@ DATA_FILE = "data.json"
 
 # Default placeholder image for albums
 DEFAULT_ALBUM_IMAGE = "https://placehold.co/128x128.png?text=Album"
+
+import re as _re
+def sanitize_url(url, fallback=None):
+    """Extract a raw URL from a possible markdown link like [text](url), or return fallback if invalid."""
+    if not url or not isinstance(url, str):
+        return fallback or DEFAULT_ALBUM_IMAGE
+    url = url.strip()
+    md_match = _re.match(r'\[.*?\]\((https?://[^)]+)\)', url)
+    if md_match:
+        return md_match.group(1)
+    if url.startswith(('http://', 'https://')):
+        return url
+    return fallback or DEFAULT_ALBUM_IMAGE
 
 # Hidden canonical groups - receive silent bonuses (not displayed anywhere)
 _CANONICAL_GROUPS = {"H10N-Y", "HOUR*LY", "ROM.COM"}
@@ -249,7 +267,8 @@ def load_data():
     global group_popularity, company_funds, group_data, album_data, user_balances, user_companies, user_cooldowns, user_daily_limits, user_stream_counts, records_24h, weekly_streams, preorder_data, article_history, random_events_log, events_channel_id, last_random_timestamp, admin_logs
 
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r') as f:
+        corrupt_error = None
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
             try:
                 loaded_data = json.load(f)
                 group_popularity.update(loaded_data.get('group_popularity', {}))
@@ -314,6 +333,30 @@ def load_data():
 
                     album_data[album_name] = data
 
+                # Reconcile win counts. A group's total is base_wins plus the wins
+                # recorded against its albums. base_wins holds everything not tied
+                # to a specific album: wins earned before album-level tracking, and
+                # any imported history. Without it, recalculating a group's total
+                # from its albums silently deletes those wins.
+                #
+                # A group's stored total is never allowed to drop: base_wins is
+                # whatever is needed to keep it whole.
+                for group_name, data in group_data.items():
+                    album_wins = sum(
+                        album_data.get(a, {}).get('wins', 0)
+                        for a in data.get('albums', [])
+                    )
+                    stored_wins = data.get('wins', 0)
+                    expected = data.get('base_wins', 0) + album_wins
+
+                    if 'base_wins' not in data or expected < stored_wins:
+                        data['base_wins'] = max(0, stored_wins - album_wins)
+                        if data['base_wins']:
+                            print(f"Preserved {data['base_wins']} untracked win(s) for {group_name}.")
+
+                    # Keep the displayed total consistent with its parts.
+                    data['wins'] = data['base_wins'] + album_wins
+
                 user_balances.update(loaded_data.get('user_balances', {}))
                 weekly_streams.update(loaded_data.get('weekly_streams', {}))
                 preorder_data.update(loaded_data.get('preorder_data', {}))
@@ -351,8 +394,24 @@ def load_data():
                 admin_logs = loaded_data.get('admin_logs', [])
                 
                 print("Data loaded from data.json successfully!")
-            except json.JSONDecodeError:
-                print("Error decoding data.json. Starting with empty data.")
+            except json.JSONDecodeError as e:
+                # Only record it here; the file must be closed before renaming.
+                corrupt_error = e
+
+        if corrupt_error is not None:
+            # Do NOT continue with empty data: the first save_data() afterwards
+            # would overwrite a recoverable file with nothing. Preserve the bad
+            # file and refuse to start so it can be repaired by hand.
+            backup = f"{DATA_FILE}.corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+            try:
+                os.replace(DATA_FILE, backup)
+                print(f"Corrupt {DATA_FILE} preserved as {backup}")
+            except OSError as copy_error:
+                print(f"Could not preserve corrupt data file: {copy_error}")
+            raise SystemExit(
+                f"FATAL: {DATA_FILE} is not valid JSON ({corrupt_error}). "
+                "Refusing to start so existing data is not overwritten."
+            )
     else:
         print("data.json not found. Starting with empty data.")
 
@@ -385,8 +444,24 @@ def save_data():
                 return obj.isoformat()
             return json.JSONEncoder.default(self, obj)
 
-    with open(DATA_FILE, 'w') as f:
-        json.dump(data_to_save, f, indent=4, cls=DateTimeEncoder)
+    # Write to a temp file and swap it into place, so an interrupted write can
+    # never leave a truncated save. Opening data.json in 'w' truncates it to
+    # zero bytes immediately, which is how a crash mid-write loses everything.
+    temp_file = DATA_FILE + ".tmp"
+    try:
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data_to_save, f, indent=4, cls=DateTimeEncoder)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_file, DATA_FILE) # Atomic on POSIX and Windows
+    except Exception as e:
+        print(f"ERROR: Failed to save data: {e}")
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except OSError:
+            pass
+        return
     print("Data saved to data.json.")
 
 # --- Bot Setup ---
@@ -397,22 +472,90 @@ class MyBot(commands.Bot):
         await self.tree.sync()
         print(f'Bot {bot.user} has synced slash commands.')
 
+        # Start the web dashboard API in this same event loop, so it shares the
+        # live in-memory state the commands use. No-op unless DASHBOARD_API_SECRET
+        # is set, so the bot runs exactly as before until the dashboard is wired up.
+        await dashboard_api.start(dashboard_api.Deps(
+            group_data=group_data,
+            album_data=album_data,
+            company_funds=company_funds,
+            company_data=company_data,
+            user_companies=user_companies,
+            user_balances=user_balances,
+            get_user_companies=get_user_companies,
+            is_user_company_owner=is_user_company_owner,
+            get_group_owner_company=get_group_owner_company,
+            is_user_group_owner=is_user_group_owner,
+            save_data=save_data,
+        ))
+
+        # Expose that API publicly via a Cloudflare Tunnel, if CLOUDFLARED_TOKEN
+        # is set. No-op otherwise, so nothing changes until you configure it.
+        await tunnel.start()
+
 bot = MyBot(command_prefix="/", intents=intents)
+
+
+# --- ERROR HANDLING ---
+# Without these, a failing command shows users "The application did not respond"
+# with no explanation, and an exception inside a tasks.Loop stops that loop
+# permanently for the rest of the process's life.
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Report command failures instead of leaving the user staring at a timeout."""
+    # Failed checks have already told the user why.
+    if isinstance(error, app_commands.CheckFailure):
+        return
+
+    original = getattr(error, 'original', error)
+    command_name = interaction.command.name if interaction.command else 'unknown'
+    print(f"ERROR in /{command_name}:")
+    traceback.print_exception(type(original), original, original.__traceback__)
+
+    message = (
+        f"❌ Something went wrong running `/{command_name}`.\n"
+        f"`{type(original).__name__}: {original}`"[:1900]
+    )
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(message, ephemeral=True)
+        else:
+            await interaction.response.send_message(message, ephemeral=True)
+    except discord.HTTPException:
+        pass # Interaction already expired; the log above is what matters
+
+
+def attach_task_error_handler(task, task_name: str):
+    """Log task failures and restart the loop.
+
+    discord.py stops a Loop after an unhandled exception, so without this one
+    bad record would silently disable a feature until the next reboot.
+    """
+    async def handler(exception: BaseException):
+        print(f"ERROR in scheduled task {task_name}:")
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        if not task.is_running():
+            print(f"Restarting {task_name}...")
+            task.restart()
+
+    task.error(handler)
 
 # --- EVENTS ---
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    if not monthly_tax_check.is_running():
-        monthly_tax_check.start()
-    if not weekly_streams_reset.is_running():
-        weekly_streams_reset.start()
-    if not birthday_check.is_running():
-        birthday_check.start()
-    if not check_expired_boycotts.is_running():
-        check_expired_boycotts.start()
-    if not decay_company_pressure.is_running():
-        decay_company_pressure.start()
+    scheduled_tasks = {
+        'monthly_tax_check': monthly_tax_check,
+        'weekly_streams_reset': weekly_streams_reset,
+        'birthday_check': birthday_check,
+        'check_expired_boycotts': check_expired_boycotts,
+        'decay_company_pressure': decay_company_pressure,
+    }
+    for task_name, task in scheduled_tasks.items():
+        attach_task_error_handler(task, task_name)
+        if not task.is_running():
+            task.start()
     
     # Backfill any missing pre-release entries to group profiles
     backfill_prereleases()
@@ -487,53 +630,7 @@ def get_random_song_from_group(group_name: str):
     if not group_albums:
         return None, None
     
-def add_song_streams(songs: dict, song_name: str, streams_to_add: int, current_week: str = None) -> int:
-    """Add streams to a song."""
-    if song_name not in songs:
-        return 0
-    
-    song_data = songs[song_name]
-    current_streams = song_data.get('streams', 0)
-    
-    song_data['streams'] = current_streams + streams_to_add
-    if current_week:
-        song_data.setdefault('weekly_streams', {})
-        song_data['weekly_streams'][current_week] = song_data['weekly_streams'].get(current_week, 0) + streams_to_add
-    
-    today_key = get_today_str()
-    song_data.setdefault('daily_streams', {})
-    song_data['daily_streams'][today_key] = song_data['daily_streams'].get(today_key, 0) + streams_to_add
-    
-    keys = sorted(song_data['daily_streams'].keys())
-    if len(keys) > 7:
-        for old_key in keys[:-7]:
-            del song_data['daily_streams'][old_key]
-    
-    return 0
 
-    for album_name in random.sample(group_albums, len(group_albums)):
-        songs = album_data[album_name].get('songs', {})
-        if songs:
-            song_name = random.choice(list(songs.keys()))
-            return song_name, album_name
-    return None, None
-
-def get_group_owner_user_id(group_name: str):
-    """Get the Discord user ID of the company owner for a group."""
-    company = group_data.get(group_name, {}).get('company')
-    if not company:
-        return None
-    for user_id, companies in user_companies.items():
-        if company in companies:
-            return user_id
-    return None
-    
-    for album_name in random.sample(group_albums, len(group_albums)):
-        songs = album_data[album_name].get('songs', {})
-        if songs:
-            song_name = random.choice(list(songs.keys()))
-            return song_name, album_name
-    return None, None
 
 def get_group_owner_user_id(group_name: str):
     """Get the Discord user ID of the company owner for a group."""
@@ -571,14 +668,32 @@ def add_song_streams(songs: dict, song_name: str, streams_to_add: int, current_w
 
 @tasks.loop(hours=1)
 async def weekly_streams_reset():
-    """Reset weekly streams at the start of each week (Monday midnight)."""
-    now = datetime.now()
-    if now.weekday() == 0 and now.hour == 0:
-        current_week = get_current_week_key()
-        for album_name in album_data:
-            album_data[album_name]['weekly_streams'] = {current_week: 0}
+    """Open a new weekly bucket at the start of each week (Monday midnight).
+
+    Uses Argentina time throughout, matching get_current_week_key(), so the
+    rollover fires in the same timezone the week key is derived from.
+
+    Previous weeks are kept: this opens the new week's counter rather than
+    replacing the dict, which used to erase all stream history every Monday.
+    """
+    now = datetime.now(ARG_TZ)
+    if now.weekday() != 0 or now.hour != 0:
+        return
+
+    current_week = get_current_week_key()
+    opened = 0
+    for album_name, album_entry in album_data.items():
+        weeks = album_entry.get('weekly_streams')
+        if not isinstance(weeks, dict):
+            weeks = {}
+            album_entry['weekly_streams'] = weeks
+        if current_week not in weeks:
+            weeks[current_week] = 0
+            opened += 1
+
+    if opened:
         save_data()
-        print(f"Weekly streams reset for week {current_week}")
+        print(f"Weekly streams: opened week {current_week} for {opened} album(s), history preserved")
 
 # Track which birthdays have been announced today to avoid duplicates
 announced_birthdays_today = set()
@@ -1729,7 +1844,7 @@ async def sales(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{bulk_text} • Physical Album",
         color=discord.Color.gold() if went_bulk else discord.Color.green()
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(current_album_data.get('image_url')))
     embed.add_field(name="Bought", value=f"+{format_number(sales_to_add)}", inline=True)
     embed.add_field(name="Stock Left", value=f"{format_number(current_album_data['stock'])}", inline=True)
     embed.set_footer(text=f"Total Sales: {format_number(current_album_data['sales'])} | {remaining_uses} uses left today")
@@ -1828,48 +1943,29 @@ async def addwin(interaction: discord.Interaction, group_name: str, show_name: s
         await interaction.response.send_message(f"❌ Cannot add a win for {group_name_upper} as they are disbanded.", ephemeral=True)
         return
 
-        company_name = (group_entry.get('company') or "").upper()
-
-    if not company_name:
-        await interaction.response.send_message(
-            "❌ This group has no company assigned.",
-            ephemeral=True
-        )
-        return
-
-    if company_name not in company_funds:
-        await interaction.response.send_message(
-            "❌ Company not found.",
-            ephemeral=True
-        )
-        return
-    
+    group_entry = group_data[group_name_upper]
     album_entry = album_data[album_name]
 
     # Increment album's specific wins
     album_entry['wins'] = album_entry.get('wins', 0) + 1
 
-    # Calculate group's total wins dynamically from all its albums
-    group_total_wins = 0
+    # Recalculate the group's total: wins not tied to an album, plus album wins.
+    # base_wins must be included or wins earned before album-level tracking, and
+    # any imported history, would be wiped out here.
+    group_total_wins = group_entry.get('base_wins', 0)
     for alb_n in group_entry.get('albums', []):
         if alb_n in album_data:
             group_total_wins += album_data[alb_n].get('wins', 0)
 
-    # Update the group's total wins (for consistency in group_data, even if not directly incremented)
-    group_entry['wins'] = group_total_wins 
+    group_entry['wins'] = group_total_wins
 
     # Increase group popularity (distributed to members)
     distribute_stat_gain_to_members(group_name_upper, 'popularity', 5)
 
-    save_data() 
-
-    # Generate hashtags with ordinal numbers
-    group_hashtag = f"#{group_name_upper.replace(' ', '')}{ordinal(group_total_wins)}Win"
-    album_hashtag = f"#{album_name.replace(' ', '')}{ordinal(album_entry['wins'])}Win"
+    save_data()
 
     await interaction.response.send_message(
-        f"🎉 {group_name_upper} takes 1st Place on {show_name} with '{album_name}'!\n\n"
-        f"**{group_hashtag}** **{album_hashtag}**"
+        f"🏆 {group_name_upper} wins on {show_name} with {album_name}!"
     )
 
 POST_TYPES = {
@@ -2131,7 +2227,7 @@ async def streams(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text}" + (" (inactive)" if is_disbanded else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=current_album_data.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(current_album_data.get('image_url')))
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.set_footer(text=f"Total: {format_number(current_album_data['streams'])} | {remaining_uses} uses left today")
 
@@ -4684,15 +4780,53 @@ CHART_CONFIG = {
 }
 
 
+# How quickly an album's chart standing fades. Lifetime streams are halved
+# every CHART_HALF_LIFE_DAYS since release, so a record slides off the chart
+# instead of holding a position forever, while recent streaming pushes back
+# against the decay. Raise it to keep older albums around longer.
+CHART_HALF_LIFE_DAYS = 60
+CHART_RECENT_DAYS = 7
+CHART_RECENT_WEIGHT = 5 # Recent plays count for more than lifetime totals
+
+
+def _chart_score(album_entry: dict):
+    """An album's chart standing: lifetime streams decayed by age, plus recent plays.
+
+    Using lifetime streams alone made every album chart forever - 96 of 174
+    albums qualified, filling almost every position and leaving no room for the
+    rest of the industry. Decay is what lets a song chart after its promotion
+    ends and then fade naturally once people stop playing it.
+    """
+    lifetime = album_entry.get('streams', 0)
+
+    release_date = album_entry.get('release_date', '')
+    try:
+        age_days = (datetime.now(ARG_TZ).date() - datetime.fromisoformat(release_date).date()).days
+    except (ValueError, TypeError):
+        age_days = 0
+    age_days = max(0, age_days)
+
+    decayed = lifetime * (0.5 ** (age_days / CHART_HALF_LIFE_DAYS))
+
+    recent = 0
+    daily = album_entry.get('daily_streams')
+    if isinstance(daily, dict):
+        today = datetime.now(ARG_TZ).date()
+        for offset in range(CHART_RECENT_DAYS):
+            recent += daily.get((today - timedelta(days=offset)).strftime("%Y-%m-%d"), 0)
+
+    return int(decayed + recent * CHART_RECENT_WEIGHT)
+
+
 def _get_all_active_albums():
-    """Returns a list of (album_name, album_entry) tuples for all actively promoting albums."""
+    """Albums eligible to chart.
+
+    Deliberately not restricted to actively promoted albums: a song keeps
+    charting while people are still playing it, and _chart_score's decay is
+    what removes the ones nobody is listening to.
+    """
     active_albums = []
     for album_name, album_entry in album_data.items():
-        if not album_entry.get('is_active_promotion'):
-            continue
-        promo_end_date_obj = album_entry.get('promotion_end_date')
-        if promo_end_date_obj and datetime.now() > promo_end_date_obj:
-            continue
         group_name = album_entry.get('group')
         if group_name and group_data.get(group_name, {}).get('is_disbanded'):
             continue
@@ -4713,19 +4847,21 @@ def _calculate_base_rank(streams: int, chart_settings: dict):
     if streams < streams_for_charting:
         return None
     
-    noise = random.uniform(0.9, 1.1)
-    
+    # Deterministic: the same score always yields the same rank, and a higher
+    # score always ranks better. Random jitter here used to invent movement
+    # between two views of an unchanged chart, and could place a
+    # lower-streaming album above a higher-streaming one.
     if streams >= streams_for_top_10:
         ratio = streams / streams_for_top_10
-        base_rank = max(1, int(11 - (ratio * 2 * noise)))
+        base_rank = max(1, int(11 - (ratio * 2)))
         return max(1, min(10, base_rank))
     elif streams >= streams_for_top_50:
         ratio = (streams - streams_for_top_50) / (streams_for_top_10 - streams_for_top_50)
-        base_rank = int(50 - (ratio * 40 * noise))
+        base_rank = int(50 - (ratio * 40))
         return max(11, min(50, base_rank))
     elif streams >= streams_for_charting:
         ratio = (streams - streams_for_charting) / (streams_for_top_50 - streams_for_charting)
-        base_rank = int(threshold - (ratio * (threshold - 51) * noise))
+        base_rank = int(threshold - (ratio * (threshold - 51)))
         return max(51, min(threshold, base_rank))
     
     return None
@@ -4741,7 +4877,7 @@ def _calculate_all_chart_ranks(chart_name: str, chart_settings: dict):
     
     album_base_ranks = []
     for album_name, album_entry in active_albums:
-        streams = album_entry.get('streams', 0)
+        streams = _chart_score(album_entry)
         base_rank = _calculate_base_rank(streams, chart_settings)
         if base_rank is not None:
             album_base_ranks.append((album_name, base_rank, streams))
@@ -4814,12 +4950,62 @@ def _update_and_format_chart_line(album_entry: dict, chart_name: str, calculated
     return f"{rank_str} {chart_name} {rank_change_text} {new_peak_text}".strip()
 
 
-@bot.tree.command(description="Display music charts for a group's active album.")
+CHARTS_ENTRIES_SHOWN = 10 # Per platform, on the overall chart view
+
+
+@bot.tree.command(description="Show the current music charts, or one group's chart run.")
 @app_commands.describe(
-    group_name="The name of the group whose active album charts you want to see."
+    group_name="Optional: a single group's chart information. Omit to see the overall charts."
 )
 @app_commands.autocomplete(group_name=group_autocomplete)
-async def charts(interaction: discord.Interaction, group_name: str):
+async def charts(interaction: discord.Interaction, group_name: str = None):
+    # No group given: show the overall charts across every platform.
+    #
+    # This branch is READ ONLY. The per-group view below records prev_rank and
+    # peak as it goes, so if browsing the overall chart did the same, simply
+    # looking at it would manufacture movement in every group's next report.
+    if group_name is None:
+        current_date_formatted = f"{datetime.now(ARG_TZ).strftime('%B')} {ordinal(datetime.now(ARG_TZ).day)}"
+        embed = discord.Embed(
+            title=f"📊 Music Charts — {current_date_formatted}",
+            color=discord.Color.blurple(),
+        )
+
+        charting_anywhere = False
+        for platform_name, settings in CHART_CONFIG.items():
+            all_ranks = _calculate_all_chart_ranks(platform_name, settings)
+            ranked = sorted(
+                ((rank, name) for name, rank in all_ranks.items() if rank is not None)
+            )
+            if not ranked:
+                embed.add_field(name=platform_name, value="*No albums charting.*", inline=False)
+                continue
+
+            charting_anywhere = True
+
+            # Only real albums are listed. The positions in between belong to
+            # the rest of the industry, which is never named or shown - the gaps
+            # in the numbering are what make this read as a public chart.
+            lines = [
+                f"`#{rank}` **{album_data.get(name, {}).get('group', '?')}** — {name}"
+                for rank, name in ranked[:CHARTS_ENTRIES_SHOWN]
+            ]
+            if len(ranked) > CHARTS_ENTRIES_SHOWN:
+                lines.append(f"*…and {len(ranked) - CHARTS_ENTRIES_SHOWN} more charting below.*")
+
+            # Stay inside Discord's 1024 character limit for an embed field.
+            value = "\n".join(lines)
+            if len(value) > 1024:
+                value = value[:1010].rsplit("\n", 1)[0] + "\n*…*"
+            embed.add_field(name=platform_name, value=value, inline=False)
+
+        if not charting_anywhere:
+            embed.description = "Nothing is charting right now."
+        embed.set_footer(text="Use /charts <group> for one group's chart run.")
+
+        await interaction.response.send_message(embed=embed)
+        return
+
     group_name_upper = group_name.upper()
 
     if group_name_upper not in group_data:
@@ -4857,8 +5043,13 @@ async def charts(interaction: discord.Interaction, group_name: str):
                 break # Found the active album
 
     if not active_album_name:
-        await interaction.response.send_message(f"❌ No active album found for `{group_name}`. Please set a promotion period using `/promoperiod`.", ephemeral=True)
-        return
+        # A song can still chart after its promotion period ends, so fall back to
+        # the group's most recent release rather than refusing to show anything.
+        released = [a for a in group_albums if a in album_data]
+        if not released:
+            await interaction.response.send_message(f"❌ `{group_name}` has no albums yet.", ephemeral=True)
+            return
+        active_album_name = max(released, key=lambda a: album_data[a].get('release_date', ''))
 
     album_entry = album_data[active_album_name]
     album_streams = album_entry.get('streams', 0)
@@ -6394,7 +6585,7 @@ async def views(interaction: discord.Interaction, album_name: str):
         description=f"**{group_name}**{viral_text} • Music Video",
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.red())
     )
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.add_field(name="Views Added", value=f"+{format_number(total_views_added)}", inline=True)
     if went_viral:
         embed.add_field(name="🔥 Viral Bonus", value=f"+{format_number(result['viral_bonus'])}", inline=True)
@@ -7355,7 +7546,7 @@ async def releasealbum(interaction: discord.Interaction, group_name: str, album_
     embed.add_field(name="Remaining Stock", value=f"{format_number(remaining_stock)}", inline=True)
     if preorder_sales > 0:
         embed.add_field(name="Revenue from Preorders", value=f"<:MonthlyPeso:1338642658436059239>{format_number(preorder_sales * 10)}", inline=True)
-    embed.set_thumbnail(url=image_url or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(image_url))
     
     await interaction.response.send_message(embed=embed)
 
@@ -7851,7 +8042,7 @@ async def addsongs(interaction: discord.Interaction, album_name: str, songs: str
     if existing_streams > 0:
         embed.set_footer(text=f"📊 {format_number(existing_streams)} existing streams distributed to songs!")
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -7896,7 +8087,7 @@ async def albumsongs(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.set_footer(text=f"Album Total Streams: {format_number(album_entry.get('streams', 0))}")
     
     await interaction.response.send_message(embed=embed)
@@ -7984,7 +8175,7 @@ async def view_album(interaction: discord.Interaction, album_name: str):
             inline=False
         )
     
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8087,7 +8278,7 @@ async def editalbum_songs(
     )
     embed.add_field(name="Changes", value="\n".join(changes), inline=False)
     embed.add_field(name="Total Songs", value=str(len(existing_songs)), inline=True)
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8167,7 +8358,7 @@ async def fixalbumstreams(interaction: discord.Interaction, album_name: str):
     
     embed.add_field(name="New Distribution", value="\n".join(song_display), inline=False)
     embed.set_footer(text=f"Total: {format_number(total_streams)} streams | Title gets 60%, b-sides share the rest")
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     
     await interaction.response.send_message(embed=embed)
 
@@ -8322,7 +8513,7 @@ async def streamsong(interaction: discord.Interaction, album_name: str, song_nam
         description=f"from **{album_name}** • **{group_name}**{viral_text}" + (" (Title Track)" if is_title else ""),
         color=discord.Color.gold() if went_viral else (discord.Color.pink() if group_entry.get('is_nations_group') else discord.Color.from_rgb(255, 105, 180))
     )
-    embed.set_thumbnail(url=album_entry.get('image_url') or DEFAULT_ALBUM_IMAGE)
+    embed.set_thumbnail(url=sanitize_url(album_entry.get('image_url')))
     embed.add_field(name="Streams", value=f"+{format_number(streams_to_add)}", inline=True)
     embed.add_field(name="Song Total", value=f"{format_number(songs[matched_song]['streams'])}", inline=True)
     embed.set_footer(text=f"Album Total: {format_number(album_entry['streams'])} | {remaining_uses} uses left today")
@@ -10243,6 +10434,588 @@ async def helpadmin(interaction: discord.Interaction):
     embed.set_footer(text="All admin actions are logged for auditing.")
     
     await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# === MUSIC SHOW BOARDS ===
+#
+# Each show scores on the categories printed on its own template, so the numbers
+# on the board always match the artwork.
+#
+# Categories with no gameplay system behind them yet use a flat placeholder
+# share rather than an invented mechanic. They are kept as separate categories
+# so each can be replaced individually later without touching the show
+# definitions or the templates.
+
+SHOW_SCORING_DAYS = 7 # Music shows score on the promotional week
+
+# Categories the game cannot model yet. Each scores a flat share of its
+# allocation so the row is visibly filled but obviously not earned.
+SHOW_PLACEHOLDER_CATEGORIES = {"sns", "social", "broadcast", "onair",
+                               "viewer_committee", "prevote", "fanvote"}
+SHOW_PLACEHOLDER_SHARE = 0.5
+
+SHOW_BOARDS = {
+    "music_core": {
+        "display": "Show! Music Core",
+        "template": "music_core",
+        "panels": 3,
+        "total_points": 10000,
+        "categories": {
+            "digital": 0.50,
+            "physical": 0.10,
+            "sns": 0.10,
+            "broadcast": 0.05,
+            "viewer_committee": 0.10,
+            "live_vote": 0.15,
+        },
+        # The board shows four rows; several categories share a row.
+        "live_vote_category": "live_vote",
+        "display_rows": {
+            "score_sound": ["digital", "physical"],
+            "score_video": ["sns", "broadcast"],
+            "score_prevote": ["viewer_committee"],
+            "score_livevote": ["live_vote"],
+        },
+    },
+    "inkigayo": {
+        "display": "Inkigayo",
+        "template": "inkigayo",
+        "panels": 3,
+        "total_points": 10000,
+        # Weights taken from the legend printed on the template itself, which
+        # sums to exactly 100 and needs no normalisation.
+        "categories": {
+            "physical": 0.10,
+            "sns": 0.20,
+            "prevote": 0.05,
+            "onair": 0.10,
+            "live_vote": 0.05,
+            "digital": 0.50,
+        },
+        "live_vote_category": "live_vote",
+        "display_rows": {
+            "score_physical": ["physical"],
+            "score_sns": ["sns"],
+            "score_prevote": ["prevote"],
+            "score_onair": ["onair"],
+            "score_livevote": ["live_vote"],
+            "score_digital": ["digital"],
+        },
+    },
+    "mcountdown": {
+        "display": "M Countdown",
+        "template": "mcountdown",
+        "panels": 2, # Head-to-head: exactly two nominees
+        "total_points": 10000,
+        "categories": {
+            "digital": 0.50,
+            "physical": 0.20,
+            "social": 0.10,
+            "fanvote": 0.15,
+            "broadcast": 0.05,
+        },
+        # M Countdown's global fan vote is where the live vote lands.
+        "live_vote_category": "fanvote",
+    },
+}
+
+
+def _sum_recent_days(daily_dict: dict, days: int = SHOW_SCORING_DAYS):
+    """Total of a daily_streams / daily_sales style dict over the last N days."""
+    if not isinstance(daily_dict, dict):
+        return 0
+    today = datetime.now(ARG_TZ).date()
+    total = 0
+    for offset in range(days):
+        day = (today - timedelta(days=offset)).strftime("%Y-%m-%d")
+        total += daily_dict.get(day, 0)
+    return total
+
+
+def get_show_album(group_name: str):
+    """The album a group competes with: the promoted one, else its latest."""
+    group_entry = group_data.get(group_name)
+    if not group_entry:
+        return None
+    albums = [a for a in group_entry.get('albums', []) if a in album_data]
+    if not albums:
+        return None
+    for album_name in albums:
+        if album_data[album_name].get('is_active_promotion'):
+            return album_name
+    return max(albums, key=lambda a: album_data[a].get('release_date', ''))
+
+
+def calculate_show_board(show_key: str, album_names: list, live_votes: dict = None):
+    """Score nominees for one show, relative to the strongest in each category."""
+    show = SHOW_BOARDS[show_key]
+    live_votes = live_votes or {}
+
+    contexts = []
+    for album_name in album_names:
+        album_entry = album_data.get(album_name, {})
+        group_entry = group_data.get(album_entry.get('group'), {})
+        contexts.append({
+            'album': album_name,
+            'group': album_entry.get('group', '?'),
+            'digital': _sum_recent_days(album_entry.get('daily_streams', {})),
+            'physical': _sum_recent_days(album_entry.get('daily_sales', {})) or album_entry.get('sales', 0),
+            'live_vote': live_votes.get(album_name, 0),
+        })
+
+    live_category = show.get('live_vote_category')
+    votes_were_cast = any(c['live_vote'] for c in contexts)
+
+    results = []
+    for index, ctx in enumerate(contexts):
+        breakdown = {}
+        for category, weight in show['categories'].items():
+            allocation = show['total_points'] * weight
+
+            # The live vote category is real whenever anyone actually voted,
+            # even if it would otherwise be a placeholder for this show.
+            if category == live_category and votes_were_cast:
+                values = [c['live_vote'] for c in contexts]
+                best = max(values)
+                breakdown[category] = int(round(allocation * (values[index] / best))) if best else 0
+                continue
+
+            if category in SHOW_PLACEHOLDER_CATEGORIES:
+                # No system behind this yet: flat share, not an invented mechanic.
+                breakdown[category] = int(round(allocation * SHOW_PLACEHOLDER_SHARE))
+                continue
+
+            values = [c.get(category, 0) for c in contexts]
+            best = max(values) if values else 0
+            share = (values[index] / best) if best > 0 else 0
+            breakdown[category] = int(round(allocation * share))
+
+        results.append({
+            'album': ctx['album'],
+            'group': ctx['group'],
+            'breakdown': breakdown,
+            'total': sum(breakdown.values()),
+        })
+
+    return results
+
+
+async def _fetch_show_art(url: str):
+    """Best-effort download of era art. Returns None on any failure."""
+    if not url:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                if response.status == 200:
+                    return await response.read()
+    except Exception as e:
+        print(f"GRAPHICS: failed to fetch {url}: {e}")
+    return None
+
+
+def _local_era_file(group_name: str, album_name: str = None):
+    """An era image file named after the album, or failing that the group."""
+    normalise = lambda n: ''.join(c for c in n.lower() if c.isalnum())
+    wanted = [normalise(n) for n in (album_name, group_name) if n]
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for target in wanted:
+        for sub_dir in ('.', 'assets/era'):
+            directory = os.path.join(base_dir, sub_dir)
+            if not os.path.isdir(directory):
+                continue
+            for filename in sorted(os.listdir(directory)):
+                stem, extension = os.path.splitext(filename)
+                if extension.lower() in ('.png', '.jpg', '.jpeg', '.webp') and normalise(stem) == target:
+                    return os.path.join(directory, filename)
+    return None
+
+
+async def get_era_art(group_name: str, album_name: str):
+    """Era art for a nominee, falling back until something works.
+
+    Older albums predate era images entirely, so this walks a chain rather than
+    assuming one exists:
+      1. era_image_url on the album      (set with /setera)
+      2. a local file named after the album, then after the group
+      3. the album cover                 (set with /setcover, or at release)
+      4. the group's profile picture, then its banner
+    If all of them are missing the slot is simply left empty and the template's
+    own artwork shows through.
+    """
+    album_entry = album_data.get(album_name, {})
+    group_entry = group_data.get(group_name, {})
+
+    art = await _fetch_show_art(album_entry.get('era_image_url'))
+    if art:
+        return art
+
+    local = _local_era_file(group_name, album_name)
+    if local:
+        try:
+            with open(local, 'rb') as f:
+                return f.read()
+        except OSError as e:
+            print(f"GRAPHICS: could not read {local}: {e}")
+
+    for fallback in (album_entry.get('image_url'),
+                     group_entry.get('profile_picture'),
+                     group_entry.get('banner_url')):
+        art = await _fetch_show_art(fallback)
+        if art:
+            return art
+
+    print(f"GRAPHICS: no era art available for {group_name} - {album_name}")
+    return None
+
+
+class LiveVoteView(ui.View):
+    """Button-based live vote, one vote per person, tallied in real time.
+
+    Discord's native polls take a duration in whole hours, which cannot express
+    a short live vote, so the show runs its own. That also allows a live tally
+    and an immediate close when the timer runs out.
+    """
+
+    def __init__(self, nominees: list, duration_seconds: int):
+        super().__init__(timeout=duration_seconds)
+        self.nominees = nominees  # [{'group':..., 'album':...}]
+        self.votes = {}           # user_id -> album_name
+        self.message = None
+
+        for index, nominee in enumerate(nominees):
+            button = ui.Button(
+                label=nominee['group'][:80],
+                style=discord.ButtonStyle.blurple,
+                custom_id=f"livevote_{index}",
+            )
+            button.callback = self._make_callback(nominee['album'])
+            self.add_item(button)
+
+    def _make_callback(self, album_name):
+        async def callback(interaction: discord.Interaction):
+            user_id = str(interaction.user.id)
+            previous = self.votes.get(user_id)
+            self.votes[user_id] = album_name
+
+            if previous == album_name:
+                note = f"Your vote for **{album_name}** already counted."
+            elif previous:
+                note = f"Vote changed to **{album_name}**."
+            else:
+                note = f"Voted for **{album_name}**!"
+
+            await interaction.response.send_message(note, ephemeral=True)
+            if self.message:
+                try:
+                    await self.message.edit(embed=self.build_embed())
+                except discord.HTTPException:
+                    pass
+        return callback
+
+    def tally(self):
+        counts = {n['album']: 0 for n in self.nominees}
+        for album_name in self.votes.values():
+            if album_name in counts:
+                counts[album_name] += 1
+        return counts
+
+    def build_embed(self, closed: bool = False):
+        counts = self.tally()
+        cast = sum(counts.values())
+        lines = []
+        for nominee in self.nominees:
+            count = counts[nominee['album']]
+            filled = int(round(12 * count / cast)) if cast else 0
+            bar = "█" * filled + "░" * (12 - filled)
+            lines.append(f"**{nominee['group']}** — {nominee['album']}\n`{bar}` {count} vote(s)")
+
+        embed = discord.Embed(
+            title="🗳️ Live Vote — CLOSED" if closed else "🗳️ Live Vote is OPEN",
+            description="\n".join(lines),
+            color=discord.Color.greyple() if closed else discord.Color.gold(),
+        )
+        embed.set_footer(
+            text="Voting has ended." if closed
+            else "One vote each — press a button below. You can change your vote."
+        )
+        return embed
+
+    async def close(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(embed=self.build_embed(closed=True), view=self)
+            except discord.HTTPException:
+                pass
+
+
+SHOW_BOARD_CHOICES = [
+    app_commands.Choice(name=cfg['display'], value=key)
+    for key, cfg in SHOW_BOARDS.items()
+]
+
+
+@bot.tree.command(description="Run a music show: announce nominees, hold a live vote, crown a winner.")
+@app_commands.describe(
+    show="Which music show to run.",
+    group1="First nominee.",
+    group2="Second nominee.",
+    group3="Third nominee (not used by M Countdown).",
+    vote_minutes="How long live voting stays open (1-14, default 5). Use 0 to skip.",
+)
+@app_commands.choices(show=SHOW_BOARD_CHOICES)
+@app_commands.autocomplete(group1=group_autocomplete, group2=group_autocomplete, group3=group_autocomplete)
+async def musicshow(
+    interaction: discord.Interaction,
+    show: app_commands.Choice[str],
+    group1: str,
+    group2: str,
+    group3: str = None,
+    vote_minutes: int = 5,
+):
+    show_key = show.value
+    show_config = SHOW_BOARDS[show_key]
+    max_panels = show_config['panels']
+
+    requested = [g for g in (group1, group2, group3) if g]
+
+    # M Countdown is a head-to-head board with exactly two slots. Rejecting the
+    # third nominee outright beats silently dropping someone's group, which
+    # would look like a bug from the player's side.
+    if len(requested) > max_panels:
+        await interaction.response.send_message(
+            f"❌ {show_config['display']} is a {max_panels}-nominee show. "
+            f"You entered {len(requested)}; please pick {max_panels}.",
+            ephemeral=True,
+        )
+        return
+
+    if len(requested) != len(set(g.upper() for g in requested)):
+        await interaction.response.send_message("❌ A group cannot compete against itself.", ephemeral=True)
+        return
+
+    nominees = []
+    for raw_name in requested:
+        group_name = raw_name.upper()
+        if group_name not in group_data:
+            await interaction.response.send_message(f"❌ Group `{raw_name}` not found.", ephemeral=True)
+            return
+        if group_data[group_name].get('is_disbanded'):
+            await interaction.response.send_message(f"❌ {group_name} is disbanded.", ephemeral=True)
+            return
+        album_name = get_show_album(group_name)
+        if not album_name:
+            await interaction.response.send_message(f"❌ {group_name} has no album to compete with.", ephemeral=True)
+            return
+        nominees.append({'group': group_name, 'album': album_name})
+
+    # --- Pre-show announcement ---
+    await interaction.response.send_message(
+        f"**{show_config['display']}** is starting!\n"
+        + "\n".join(f"• {n['group']} - {n['album']}" for n in nominees)
+    )
+
+    # --- Live vote ---
+    live_votes = {}
+    vote_minutes = max(0, min(14, vote_minutes))  # Interaction tokens expire at 15
+    if vote_minutes and show_config.get('live_vote_category'):
+        view = LiveVoteView(nominees, vote_minutes * 60)
+        view.message = await interaction.followup.send(embed=view.build_embed(), view=view, wait=True)
+        await view.wait()   # returns when the timer runs out
+        await view.close()
+        live_votes = view.tally()
+
+    results = calculate_show_board(show_key, [n['album'] for n in nominees], live_votes)
+    winner = max(results, key=lambda r: r['total'])
+    winner_index = results.index(winner)
+
+    # --- Board image ---
+    file = None
+    try:
+        if show_key == 'mcountdown':
+            left, right = results[0], results[1]
+            left_art = await get_era_art(left['group'], left['album'])
+            right_art = await get_era_art(right['group'], right['album'])
+            buffer = await asyncio.to_thread(
+                graphics.render_mcountdown,
+                {'group': left['group'], 'song': left['album'],
+                 'scores': left['breakdown'], 'total': left['total']},
+                {'group': right['group'], 'song': right['album'],
+                 'scores': right['breakdown'], 'total': right['total']},
+                left_art, right_art,
+            )
+        else:
+            panel_data, images = [], {}
+            for index, result in enumerate(results):
+                group_entry = group_data.get(result['group'], {})
+                korean_name = group_entry.get('korean_name', '')
+                panel = {
+                    'group_name': f"{result['group']} ({korean_name})" if korean_name else result['group'],
+                    'song_title': result['album'],
+                    'score_total': f"{result['total']:,}",
+                }
+                for row_name, categories in show_config.get('display_rows', {}).items():
+                    panel[row_name] = f"{sum(result['breakdown'].get(c, 0) for c in categories):,}"
+                panel_data.append(panel)
+
+                art = await get_era_art(result['group'], result['album'])
+                if art:
+                    images[(index, 'era_image')] = art
+
+            buffer = await asyncio.to_thread(
+                graphics.render_template,
+                show_config['template'],
+                panel_data,
+                images,
+                {(winner_index, 'score_total'): graphics.WINNER_GOLD},
+            )
+        file = discord.File(buffer, filename=f"{show_key}_results.png")
+    except Exception as e:
+        print(f"GRAPHICS: {show_key} render failed:")
+        traceback.print_exception(type(e), e, e.__traceback__)
+
+    # --- Result: the win line only, no scoreboard dump ---
+    message = (
+        f"🏆 {winner['group']} wins on {show_config['display']} with {winner['album']}!\n"
+        f"Use `/addwin` to record the win."
+    )
+
+    if file:
+        await interaction.followup.send(message, file=file)
+    else:
+        await interaction.followup.send(message)
+
+
+IMAGE_CONTENT_TYPES = ("image/png", "image/jpeg", "image/webp", "image/gif")
+
+
+def _resolve_image_input(upload, url, label):
+    """Turn an upload or URL into a storable link.
+
+    Discord attachments are already hosted, so the CDN link is stored rather
+    than the bytes. Returns (url, error_message).
+    """
+    if upload and url:
+        return None, f"Give either an upload or a URL for the {label}, not both."
+    if not upload and not url:
+        return None, f"Provide an image for the {label}: upload a file or pass a URL."
+
+    if upload:
+        if upload.content_type not in IMAGE_CONTENT_TYPES:
+            return None, f"`{upload.filename}` is not a supported image (PNG, JPEG, WEBP or GIF)."
+        if upload.size > 8 * 1024 * 1024:
+            return None, f"`{upload.filename}` is larger than 8MB."
+        return upload.url, None
+
+    if not url.lower().startswith(("http://", "https://")):
+        return None, "That does not look like a valid image URL."
+    return url, None
+
+
+@bot.tree.command(description="Set the era image for an album (upload from your gallery, or paste a URL).")
+@app_commands.describe(
+    album_name="The album this era belongs to.",
+    image="Upload an image from your device or gallery.",
+    image_url="Alternatively, paste a direct image URL.",
+)
+@app_commands.autocomplete(album_name=user_album_autocomplete)
+async def setera(
+    interaction: discord.Interaction,
+    album_name: str,
+    image: discord.Attachment = None,
+    image_url: str = None,
+):
+    if album_name not in album_data:
+        await interaction.response.send_message(f"❌ Album `{album_name}` not found.", ephemeral=True)
+        return
+
+    album_entry = album_data[album_name]
+    group_name = album_entry.get('group')
+
+    if not is_user_group_owner(str(interaction.user.id), group_name):
+        await interaction.response.send_message(
+            f"❌ You do not manage the company that owns '{group_name}'.", ephemeral=True)
+        return
+
+    resolved_url, error = _resolve_image_input(image, image_url, "era image")
+    if error:
+        await interaction.response.send_message(f"❌ {error}", ephemeral=True)
+        return
+
+    album_entry['era_image_url'] = resolved_url
+    save_data()
+
+    embed = discord.Embed(
+        title=f"🎬 Era image set for '{album_name}'",
+        description=f"**{group_name}** • used on music show boards.",
+        color=discord.Color.teal(),
+    )
+    embed.set_image(url=resolved_url)
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(description="Set an album's cover image (upload from your gallery, or paste a URL).")
+@app_commands.describe(
+    album_name="The album to update.",
+    image="Upload an image from your device or gallery.",
+    image_url="Alternatively, paste a direct image URL.",
+)
+@app_commands.autocomplete(album_name=user_album_autocomplete)
+async def setcover(
+    interaction: discord.Interaction,
+    album_name: str,
+    image: discord.Attachment = None,
+    image_url: str = None,
+):
+    if album_name not in album_data:
+        await interaction.response.send_message(f"❌ Album `{album_name}` not found.", ephemeral=True)
+        return
+
+    album_entry = album_data[album_name]
+    group_name = album_entry.get('group')
+
+    if not is_user_group_owner(str(interaction.user.id), group_name):
+        await interaction.response.send_message(
+            f"❌ You do not manage the company that owns '{group_name}'.", ephemeral=True)
+        return
+
+    resolved_url, error = _resolve_image_input(image, image_url, "album cover")
+    if error:
+        await interaction.response.send_message(f"❌ {error}", ephemeral=True)
+        return
+
+    album_entry['image_url'] = resolved_url
+    save_data()
+
+    embed = discord.Embed(
+        title=f"💿 Cover updated for '{album_name}'",
+        description=f"**{group_name}**",
+        color=discord.Color.teal(),
+    )
+    embed.set_thumbnail(url=resolved_url)
+    await interaction.response.send_message(embed=embed)
+
+
+@bot.tree.command(description="ADMIN: overlay layout guides on a show template for tuning.")
+@app_commands.describe(show="Which template to check.")
+@app_commands.choices(show=SHOW_BOARD_CHOICES)
+async def showlayout(interaction: discord.Interaction, show: app_commands.Choice[str]):
+    """Draws every slot as a labelled box so coordinates can be checked by eye."""
+    await interaction.response.defer(ephemeral=True)
+    template = SHOW_BOARDS[show.value]['template']
+    try:
+        buffer = await asyncio.to_thread(graphics.render_calibration, template)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Could not render the guide: {e}", ephemeral=True)
+        return
+    await interaction.followup.send(
+        "Red boxes are image slots, magenta crosshairs are text anchors.\n"
+        "Tell me which are off and by how much and I'll adjust `graphics.py`.",
+        file=discord.File(buffer, filename=f"{template}_layout.png"),
+        ephemeral=True,
+    )
 
 
 # === RUN ===
