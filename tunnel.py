@@ -40,23 +40,48 @@ def _download_binary(dest):
 
 
 def _launch(token):
+    """Launch cloudflared. token=None runs a quick (trycloudflare) tunnel."""
     global _process
     binary = os.path.join(os.getcwd(), "cloudflared")
     if not os.path.exists(binary):
         _download_binary(binary)
 
-    # Inherit stdout/stderr so tunnel logs show in the Wispbyte console.
-    _process = subprocess.Popen(
-        [binary, "tunnel", "--no-autoupdate", "run", "--token", token]
-    )
-    print("Tunnel: cloudflared started.")
+    if token:
+        cmd = [binary, "tunnel", "--no-autoupdate", "run", "--token", token]
+    else:
+        # Quick tunnel: a free public https URL, no domain or token needed.
+        port = os.getenv("DASHBOARD_API_PORT", "8787")
+        cmd = [binary, "tunnel", "--no-autoupdate", "--url", f"http://localhost:{port}"]
+
+    # Inherit stdout/stderr so tunnel logs (incl. the URL) show in the console.
+    _process = subprocess.Popen(cmd)
+
+    if token:
+        print("Tunnel: cloudflared started (named tunnel).")
+    else:
+        print("=" * 70)
+        print("Tunnel: QUICK TUNNEL started.")
+        print("Look just ABOVE/BELOW for a line like:")
+        print("    https://<random-words>.trycloudflare.com")
+        print("That whole https:// address is your BOT_API_URL.")
+        print("=" * 70)
 
 
 async def start():
     """Start the tunnel if configured. Never raises."""
+    # QUICK_TUNNEL=1 gives a free public URL with no domain and no token.
+    # It takes priority, so you don't have to remove an old CLOUDFLARED_TOKEN.
+    quick = os.getenv("QUICK_TUNNEL", "").strip().lower() in ("1", "true", "yes", "on")
+    if quick:
+        try:
+            await asyncio.to_thread(_launch, None)
+        except Exception as e:
+            print(f"Tunnel: failed to start quick tunnel ({e}).")
+        return
+
     token = os.getenv("CLOUDFLARED_TOKEN")
     if not token:
-        print("Tunnel: CLOUDFLARED_TOKEN not set — tunnel disabled.")
+        print("Tunnel: no CLOUDFLARED_TOKEN and QUICK_TUNNEL not set — tunnel disabled.")
         return
     try:
         # Download + spawn are blocking; keep them off the event loop.
