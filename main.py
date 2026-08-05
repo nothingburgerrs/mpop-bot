@@ -10656,15 +10656,48 @@ def calculate_show_board(show_key: str, album_names: list, live_votes: dict = No
     return results
 
 
+async def _refresh_discord_url(url: str) -> str:
+    """Discord CDN links expire after ~24h; ask Discord for a fresh one.
+
+    Stored image_url/banner values are Discord attachment links that go 404 once
+    their signature expires, which is why generated images showed blank. This
+    swaps in a fresh signed URL using the bot token. Returns the original URL
+    unchanged if it isn't a Discord link or the refresh fails.
+    """
+    if not url or ("discordapp.com" not in url and "discordapp.net" not in url):
+        return url
+    # refresh-urls matches by the attachment path; normalise to cdn, drop query.
+    cdn_url = url.replace("media.discordapp.net", "cdn.discordapp.com").split("?")[0]
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://discord.com/api/v10/attachments/refresh-urls",
+                headers={"Authorization": f"Bot {TOKEN}", "Content-Type": "application/json"},
+                json={"attachment_urls": [cdn_url]},
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status == 200:
+                    items = (await resp.json()).get("refreshed_urls", [])
+                    if items and items[0].get("refreshed"):
+                        return items[0]["refreshed"]
+                else:
+                    print(f"GRAPHICS: refresh-urls HTTP {resp.status}")
+    except Exception as e:
+        print(f"GRAPHICS: refresh-urls failed: {e}")
+    return url
+
+
 async def _fetch_show_art(url: str):
     """Best-effort download of era art. Returns None on any failure."""
     if not url:
         return None
+    url = await _refresh_discord_url(url)  # revive expired Discord CDN links
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as response:
                 if response.status == 200:
                     return await response.read()
+                print(f"GRAPHICS: fetch {url[:80]} -> HTTP {response.status}")
     except Exception as e:
         print(f"GRAPHICS: failed to fetch {url}: {e}")
     return None
@@ -11090,8 +11123,11 @@ def _spotify_font(size, bold=False):
 
 
 def _spotify_cjk_font(size):
-    """A font that can render Hangul, or None if the host has none installed."""
-    for path in ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+    """A font that can render Hangul. Ships one in the repo so it works on any
+    host; falls back to system CJK fonts if present."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in (os.path.join(here, "assets", "fonts", "NanumGothic-Regular.ttf"),
+                 "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
                  "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
                  "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
                  "C:/Windows/Fonts/malgun.ttf"):
@@ -11216,12 +11252,15 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
         draw.text((cx, cy + 176), r.get("subtitle", ""), font=f_tiny, fill=GREY)
 
     # --- About ---
+    # The description can contain Hangul (e.g. the korean name), so render it
+    # with the CJK font when available; DejaVu would show boxes.
+    f_about = _spotify_cjk_font(15) or f_small
     if about_wrapped:
         ay = content_top + max(left_h, right_h) + 10
         draw.text((50, ay), "About", font=f_section, fill=WHITE)
         ay += 34
         for line in about_wrapped:
-            draw.text((50, ay), line, font=f_small, fill=GREY)
+            draw.text((50, ay), line, font=f_about, fill=GREY)
             ay += 24
 
     out = io.BytesIO()
