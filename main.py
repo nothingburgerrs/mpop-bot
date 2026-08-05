@@ -11074,5 +11074,245 @@ async def showlayout(interaction: discord.Interaction, show: app_commands.Choice
     )
 
 
+# === SPOTIFY PROFILE ===
+# A shareable, Spotify-style artist profile image, drawn from scratch so it
+# adapts to any number of tracks/releases. Reuses the bot's PIL setup.
+
+def _spotify_font(size, bold=False):
+    latin = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+    for path in (f"/usr/share/fonts/truetype/dejavu/{latin}",
+                 f"C:/Windows/Fonts/{'arialbd.ttf' if bold else 'arial.ttf'}"):
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _spotify_cjk_font(size):
+    """A font that can render Hangul, or None if the host has none installed."""
+    for path in ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                 "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                 "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                 "C:/Windows/Fonts/malgun.ttf"):
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    return None
+
+
+def _spotify_square(img_bytes, size):
+    """Center-cropped square cover of `size`px, or a neutral placeholder."""
+    try:
+        im = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        w, h = im.size
+        s = min(w, h)
+        im = im.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
+        return im.resize((size, size), Image.LANCZOS)
+    except Exception:
+        return Image.new("RGB", (size, size), (40, 40, 48))
+
+
+def _spotify_truncate(draw, text, font, max_w):
+    if draw.textlength(text, font=font) <= max_w:
+        return text
+    while text and draw.textlength(text + "…", font=font) > max_w:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
+
+def create_spotify_profile(profile: dict) -> io.BytesIO:
+    """Render a Spotify-style profile PNG. See /spotify for the data shape."""
+    W = 900
+    BG = (18, 18, 20)
+    GREEN = (30, 215, 96)
+    WHITE = (255, 255, 255)
+    GREY = (179, 179, 179)
+
+    header_h = 360
+    content_top = header_h + 34
+    tracks = profile["tracks"]
+    releases = profile["releases"]
+
+    f_name = _spotify_font(60, bold=True)
+    f_section = _spotify_font(24, bold=True)
+    f_track = _spotify_font(18)
+    f_small = _spotify_font(15)
+    f_tiny = _spotify_font(13)
+    f_rank = _spotify_font(16)
+    cjk = _spotify_cjk_font(20)
+
+    import textwrap
+    # --- measure so the canvas is exactly tall enough ---
+    left_h = 40 + len(tracks) * 58
+    rel_rows = (len(releases) + 1) // 2
+    right_h = 40 + rel_rows * (150 + 48)
+    about = (profile.get("description") or "").strip()
+    about_wrapped = textwrap.wrap(about, width=95)[:6] if about else []
+    about_h = (30 + len(about_wrapped) * 24 + 20) if about_wrapped else 0
+    height = content_top + max(left_h, right_h) + about_h + 30
+
+    img = Image.new("RGB", (W, height), BG)
+    draw = ImageDraw.Draw(img)
+
+    # --- header image + fade into the page ---
+    if profile.get("header"):
+        try:
+            hdr = Image.open(io.BytesIO(profile["header"])).convert("RGB")
+            w, h = hdr.size
+            scale = max(W / w, header_h / h)
+            hdr = hdr.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+            left = (hdr.width - W) // 2
+            img.paste(hdr.crop((left, 0, left + W, header_h)), (0, 0))
+        except Exception:
+            draw.rectangle([0, 0, W, header_h], fill=(60, 40, 75))
+    else:
+        draw.rectangle([0, 0, W, header_h], fill=(60, 40, 75))
+
+    fade = Image.new("RGBA", (W, header_h), (0, 0, 0, 0))
+    fd = ImageDraw.Draw(fade)
+    for y in range(header_h):
+        alpha = int(255 * (y / header_h) ** 1.4)
+        fd.line([(0, y), (W, y)], fill=(BG[0], BG[1], BG[2], alpha))
+    img.paste(fade, (0, 0), fade)
+
+    # --- header text ---
+    x = 50
+    draw.text((x, header_h - 200), "✓ Verified Artist", font=f_small, fill=GREEN)
+    name = _spotify_truncate(draw, profile["name"], f_name, W - 100)
+    draw.text((x, header_h - 172), name, font=f_name, fill=WHITE)
+    if cjk and profile.get("korean"):
+        draw.text((x, header_h - 92), profile["korean"], font=cjk, fill=GREY)
+    listeners = f"{profile['monthly_listeners']:,} monthly listeners"
+    draw.text((x, header_h - 56), listeners, font=f_small, fill=WHITE)
+
+    # --- Top tracks (left column) ---
+    lx = 50
+    draw.text((lx, content_top), "Top tracks", font=f_section, fill=WHITE)
+    ty = content_top + 46
+    for i, t in enumerate(tracks, 1):
+        draw.text((lx, ty + 14), str(i), font=f_rank, fill=GREY)
+        cover = _spotify_square(t.get("cover"), 46)
+        img.paste(cover, (lx + 28, ty))
+        name = _spotify_truncate(draw, t["name"], f_track, 250)
+        draw.text((lx + 86, ty + 12), name, font=f_track, fill=WHITE)
+        plays = f"{t['plays']:,}"
+        draw.text((lx + 430, ty + 14), plays, font=f_small, fill=GREY, anchor="ra")
+        ty += 58
+
+    # --- Popular releases (right column, 2-wide grid) ---
+    rx = 520
+    draw.text((rx, content_top), "Popular releases", font=f_section, fill=WHITE)
+    gy = content_top + 46
+    for idx, r in enumerate(releases):
+        col = idx % 2
+        row = idx // 2
+        cx = rx + col * 168
+        cy = gy + row * (150 + 48)
+        img.paste(_spotify_square(r.get("cover"), 150), (cx, cy))
+        title = _spotify_truncate(draw, r["title"], f_small, 150)
+        draw.text((cx, cy + 156), title, font=f_small, fill=WHITE)
+        draw.text((cx, cy + 176), r.get("subtitle", ""), font=f_tiny, fill=GREY)
+
+    # --- About ---
+    if about_wrapped:
+        ay = content_top + max(left_h, right_h) + 10
+        draw.text((50, ay), "About", font=f_section, fill=WHITE)
+        ay += 34
+        for line in about_wrapped:
+            draw.text((50, ay), line, font=f_small, fill=GREY)
+            ay += 24
+
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    out.seek(0)
+    return out
+
+
+def _spotify_release_subtitle(album: dict) -> str:
+    album_type = album.get("album_type") or album.get("type") or "Album"
+    label = {"full": "Full Album", "mini": "Mini Album", "single": "Single Album"}.get(
+        str(album_type).lower(), str(album_type).title()
+    )
+    fmt = album.get("album_format") or album.get("format")
+    return f"{label} · {str(fmt).title()}" if fmt else label
+
+
+@bot.tree.command(description="Generate a Spotify-style artist profile for a group.")
+@app_commands.autocomplete(group_name=group_autocomplete)
+async def spotify(interaction: discord.Interaction, group_name: str):
+    group_name_upper = group_name.upper()
+    if group_name_upper not in group_data:
+        await interaction.response.send_message(f"❌ Group `{group_name}` not found.", ephemeral=True)
+        return
+
+    await interaction.response.defer()
+    g = group_data[group_name_upper]
+    album_names = [a for a in g.get("albums", []) if a in album_data]
+
+    # Top tracks: every song across the group's albums, ranked by streams.
+    # Falls back to the album itself when it has no per-song tracking.
+    tracks = []
+    for album_name in album_names:
+        album = album_data[album_name]
+        cover_url = sanitize_url(album.get("image_url"))
+        songs = album.get("songs", {})
+        if songs and isinstance(songs, dict):
+            for song_name, song_data in songs.items():
+                tracks.append({"name": song_name, "plays": song_data.get("streams", 0), "cover_url": cover_url})
+        else:
+            tracks.append({"name": album_name, "plays": album.get("streams", 0), "cover_url": cover_url})
+    tracks.sort(key=lambda t: t["plays"], reverse=True)
+    top_tracks = tracks[:5]
+
+    # Popular releases: the group's albums by streams (keep names alongside).
+    releases_named = sorted(
+        ((name, album_data[name]) for name in album_names),
+        key=lambda pair: pair[1].get("streams", 0), reverse=True,
+    )[:4]
+    top_releases = [
+        {"title": name,
+         "subtitle": _spotify_release_subtitle(album),
+         "cover_url": sanitize_url(album.get("image_url"))}
+        for name, album in releases_named
+    ]
+
+    total_streams = sum(album_data[a].get("streams", 0) for a in album_names)
+    monthly_listeners = int(g.get("popularity", 0) * 280 + total_streams * 0.001)
+
+    header_url = sanitize_url(
+        g.get("banner_url") or g.get("profile_picture")
+        or (top_releases[0]["cover_url"] if top_releases else None)
+    )
+
+    # Fetch all the images (best-effort; missing ones become placeholders).
+    header_bytes = await _fetch_show_art(header_url)
+    for t in top_tracks:
+        t["cover"] = await _fetch_show_art(t["cover_url"])
+    for r in top_releases:
+        r["cover"] = await _fetch_show_art(r["cover_url"])
+
+    profile = {
+        "name": group_name_upper,
+        "korean": g.get("korean_name", ""),
+        "description": g.get("description", ""),
+        "monthly_listeners": monthly_listeners,
+        "header": header_bytes,
+        "tracks": top_tracks,
+        "releases": top_releases,
+    }
+
+    try:
+        buffer = await asyncio.to_thread(create_spotify_profile, profile)
+    except Exception as e:
+        print(f"GRAPHICS: spotify profile render failed: {e}")
+        traceback.print_exception(type(e), e, e.__traceback__)
+        await interaction.followup.send(f"❌ Could not render the profile: {e}", ephemeral=True)
+        return
+
+    await interaction.followup.send(file=discord.File(buffer, filename=f"{group_name_upper}_spotify.png"))
+
+
 # === RUN ===
 bot.run(TOKEN)
