@@ -663,8 +663,52 @@ def add_song_streams(songs: dict, song_name: str, streams_to_add: int, current_w
     if len(keys) > 7:
         for old_key in keys[:-7]:
             del song_data['daily_streams'][old_key]
-    
+
     return 0
+
+
+def apply_album_streams(album_entry: dict, amount: int, current_week: str = None):
+    """Add streams to an album everywhere they need to count.
+
+    Updates the album total, the weekly counter, AND distributes across the
+    album's songs (title track 60%, b-sides split the rest) — the same way
+    /streams does. Payola used to only bump the album total, so the boost was
+    invisible in /view_album and the charts, which read the per-song streams.
+    """
+    if amount <= 0:
+        return
+    current_week = current_week or get_current_week_key()
+
+    album_entry['streams'] = album_entry.get('streams', 0) + amount
+    album_entry.setdefault('weekly_streams', {})
+    album_entry['weekly_streams'][current_week] = album_entry['weekly_streams'].get(current_week, 0) + amount
+
+    songs = album_entry.get('songs', {})
+    if not songs:
+        return
+
+    title_track = next((n for n, s in songs.items() if s.get('is_title')), None)
+    other_songs = [n for n in songs if n != title_track]
+
+    if title_track:
+        if other_songs:
+            title_share = int(amount * 0.6)
+            remaining = amount - title_share
+            weights = [(0.3 ** i) * random.uniform(0.5, 1.5) for i in range(len(other_songs))]
+            random.shuffle(weights)
+            total_w = sum(weights) or 1
+            for i, song_name in enumerate(other_songs):
+                add_song_streams(songs, song_name, int(remaining * (weights[i] / total_w)), current_week)
+        else:
+            title_share = amount
+        add_song_streams(songs, title_track, title_share, current_week)
+    else:
+        song_list = list(songs.keys())
+        weights = [(0.3 ** i) * random.uniform(0.5, 1.5) for i in range(len(song_list))]
+        random.shuffle(weights)
+        total_w = sum(weights) or 1
+        for i, song_name in enumerate(song_list):
+            add_song_streams(songs, song_name, int(amount * (weights[i] / total_w)), current_week)
 
 @tasks.loop(hours=1)
 async def weekly_streams_reset():
@@ -2630,7 +2674,18 @@ async def groupmembers(interaction: discord.Interaction, group_name: str):
         embed.description = f"Subunit of **{parent}**"
     
     if members:
-        member_list = "\n".join([f"• {m}" for m in members])
+        # Members are stored as dicts ({'name': ..., 'level': ..., ...}). Printing
+        # the whole dict per member blew past Discord's 1024-char field limit and
+        # made the command fail — pull out just the name.
+        names = []
+        for m in members:
+            if isinstance(m, dict):
+                names.append(m.get('name', 'Unknown'))
+            else:
+                names.append(str(m))
+        member_list = "\n".join(f"• {n}" for n in names)
+        if len(member_list) > 1024:
+            member_list = member_list[:1000].rsplit("\n", 1)[0] + "\n…"
         embed.add_field(name=f"Roster ({len(members)} members)", value=member_list, inline=False)
     else:
         embed.add_field(name="Roster", value="No members added yet. Use `/addmember` to add members!", inline=False)
@@ -5974,7 +6029,7 @@ class PayolaShopView(ui.View):
             streams_added = random.randint(*item_details['streams_to_add_range'])
             sales_added = random.randint(*item_details['sales_to_add_range'])
 
-            target_album_entry['streams'] = target_album_entry.get('streams', 0) + streams_added
+            apply_album_streams(target_album_entry, streams_added)
             target_album_entry['sales'] = target_album_entry.get('sales', 0) + sales_added
 
             outcome_message += (
@@ -6118,7 +6173,7 @@ class PayolaShopView(ui.View):
                 return
 
             streams_added = random.randint(*item_details['streams_to_add_range'])
-            target_album_entry['streams'] = target_album_entry.get('streams', 0) + streams_added
+            apply_album_streams(target_album_entry, streams_added)
 
             if target_album_entry.get('first_24h_tracking'):
                 tracking = target_album_entry['first_24h_tracking']
@@ -6184,7 +6239,7 @@ class PayolaShopView(ui.View):
                     pass
             else:
                 target_album_entry['views'] = target_album_entry.get('views', 0) + views_added
-                target_album_entry['streams'] = target_album_entry.get('streams', 0) + streams_added
+                apply_album_streams(target_album_entry, streams_added)
 
                 if target_album_entry.get('first_24h_tracking'):
                     tracking = target_album_entry['first_24h_tracking']
@@ -8139,6 +8194,7 @@ async def view_album(interaction: discord.Interaction, album_name: str):
     embed.add_field(name="Weekly Streams", value=format_number(weekly_streams), inline=True)
     embed.add_field(name="Total Sales", value=format_number(total_sales), inline=True)
     embed.add_field(name="MV Views", value=format_number(mv_views), inline=True)
+    embed.add_field(name="Wins", value=str(album_entry.get('wins', 0)), inline=True)
     
     if format_type == 'physical':
         current_stock = album_entry.get('stock', 0)
