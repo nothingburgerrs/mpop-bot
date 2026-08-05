@@ -11177,7 +11177,14 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
     f_small = _spotify_font(15)
     f_tiny = _spotify_font(13)
     f_rank = _spotify_font(16)
-    cjk = _spotify_cjk_font(20)
+    # CJK-capable fonts, used per-string only when a name actually has Hangul,
+    # so Latin text keeps the nicer DejaVu look.
+    cjk_track = _spotify_cjk_font(18)
+    cjk_small = _spotify_cjk_font(15)
+
+    def _pick(text, latin_font, cjk_font):
+        has_hangul = any('가' <= c <= '힣' or '㄰' <= c <= '㆏' for c in text)
+        return cjk_font if (has_hangul and cjk_font) else latin_font
 
     import textwrap
     # --- measure so the canvas is exactly tall enough ---
@@ -11185,6 +11192,9 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
     rel_rows = (len(releases) + 1) // 2
     right_h = 40 + rel_rows * (150 + 48)
     about = (profile.get("description") or "").strip()
+    # Bios sometimes use markdown (**bold**, *italic*, etc.) which can't render as
+    # styling in an image — strip the markers so they don't show literally.
+    about = _re.sub(r'(\*\*|\*|__|~~|`)', '', about)
     about_wrapped = textwrap.wrap(about, width=95)[:6] if about else []
     about_h = (30 + len(about_wrapped) * 24 + 20) if about_wrapped else 0
     height = content_top + max(left_h, right_h) + about_h + 30
@@ -11215,11 +11225,10 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
 
     # --- header text ---
     x = 50
-    draw.text((x, header_h - 200), "✓ Verified Artist", font=f_small, fill=GREEN)
     name = _spotify_truncate(draw, profile["name"], f_name, W - 100)
     draw.text((x, header_h - 172), name, font=f_name, fill=WHITE)
-    if cjk and profile.get("korean"):
-        draw.text((x, header_h - 92), profile["korean"], font=cjk, fill=GREY)
+    # Verified badge sits under the name (where the korean name used to be).
+    draw.text((x, header_h - 92), "✓ Verified Artist", font=f_small, fill=GREEN)
     listeners = f"{profile['monthly_listeners']:,} monthly listeners"
     draw.text((x, header_h - 56), listeners, font=f_small, fill=WHITE)
 
@@ -11231,8 +11240,9 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
         draw.text((lx, ty + 14), str(i), font=f_rank, fill=GREY)
         cover = _spotify_square(t.get("cover"), 46)
         img.paste(cover, (lx + 28, ty))
-        name = _spotify_truncate(draw, t["name"], f_track, 250)
-        draw.text((lx + 86, ty + 12), name, font=f_track, fill=WHITE)
+        track_font = _pick(t["name"], f_track, cjk_track)
+        name = _spotify_truncate(draw, t["name"], track_font, 250)
+        draw.text((lx + 86, ty + 12), name, font=track_font, fill=WHITE)
         plays = f"{t['plays']:,}"
         draw.text((lx + 430, ty + 14), plays, font=f_small, fill=GREY, anchor="ra")
         ty += 58
@@ -11247,8 +11257,9 @@ def create_spotify_profile(profile: dict) -> io.BytesIO:
         cx = rx + col * 168
         cy = gy + row * (150 + 48)
         img.paste(_spotify_square(r.get("cover"), 150), (cx, cy))
-        title = _spotify_truncate(draw, r["title"], f_small, 150)
-        draw.text((cx, cy + 156), title, font=f_small, fill=WHITE)
+        title_font = _pick(r["title"], f_small, cjk_small)
+        title = _spotify_truncate(draw, r["title"], title_font, 150)
+        draw.text((cx, cy + 156), title, font=title_font, fill=WHITE)
         draw.text((cx, cy + 176), r.get("subtitle", ""), font=f_tiny, fill=GREY)
 
     # --- About ---
@@ -11303,7 +11314,6 @@ async def spotify(interaction: discord.Interaction, group_name: str):
         else:
             tracks.append({"name": album_name, "plays": album.get("streams", 0), "cover_url": cover_url})
     tracks.sort(key=lambda t: t["plays"], reverse=True)
-    top_tracks = tracks[:5]
 
     # Popular releases: the group's albums by streams (keep names alongside).
     releases_named = sorted(
@@ -11316,6 +11326,12 @@ async def spotify(interaction: discord.Interaction, group_name: str):
          "cover_url": sanitize_url(album.get("image_url"))}
         for name, album in releases_named
     ]
+
+    # Show enough top tracks to roughly match the releases column height, so a
+    # group with several releases doesn't leave a big gap under its tracks.
+    rel_rows = (len(top_releases) + 1) // 2
+    ideal_track_rows = max(5, round((rel_rows * (150 + 48)) / 58))
+    top_tracks = tracks[:min(len(tracks), 10, ideal_track_rows)]
 
     total_streams = sum(album_data[a].get("streams", 0) for a in album_names)
     monthly_listeners = int(g.get("popularity", 0) * 280 + total_streams * 0.001)
